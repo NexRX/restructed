@@ -116,7 +116,7 @@ A complete subset of fields of the original model wrapped in `Option<T>` with th
 
 **Arguements:**
 - `name` - The name of the struct the generate (**Required**, **Must be first** e.g. `MyStruct`)
-- `omit` - A *list* of field names in the original structure to omit (**Required**, e.g. `fields(field1, field2, ...)`)
+- `omit` - A *list* of field names in the original structure to omit (e.g. `fields(field1, field2, ...)`)
 - `derive` - A *list* of derivables (in scope) to derive on the generated struct (e.g. `derive(Clone, Debug, thiserror::Error)`)
 - `default_derives` - A *bool*, if `true` *(default)* then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `default_derives = false`)
  
