@@ -1,27 +1,29 @@
-use proc_macro::TokenStream;
-use proc_macro2::{Ident, TokenTree};
-use quote::{format_ident, quote};
-use syn::{self, parse_macro_input, Attribute, DeriveInput, Type};
-
 use crate::*;
+use proc_macro2::{Ident, TokenStream, TokenTree};
+use quote::quote;
+use syn::{Attribute, DeriveInput, Type};
 
 struct PatchModelArgs {
     name: Ident,
     omit: Vec<Ident>,
+    derives: Vec<Ident>,
 }
 
 pub fn impl_patch_model_new(
     ast: &DeriveInput,
     attr: &Attribute,
     oai_attr: &Vec<&Attribute>,
-) -> proc_macro2::TokenStream {
-    let PatchModelArgs { name, omit } = parse_patch_arg(attr);
+) -> TokenStream {
+    let PatchModelArgs {
+        name,
+        omit,
+        derives,
+    } = parse_patch_arg(attr);
 
     let original_name = &ast.ident;
 
     // Build the fields for the new type, wrapping each original field in an Option
-    let mut option_field: Vec<Ident> = vec![];
-    let mut maybe_field: Vec<Ident> = vec![];
+    let mut fields_and_is_option: Vec<(&Ident, bool)> = vec![];
     let mut fields: Vec<_> = vec![];
     match &ast.data {
         syn::Data::Struct(data) => data.fields.iter().for_each(|field| {
@@ -45,92 +47,57 @@ pub fn impl_patch_model_new(
                         .map_or(false, |seg| seg.ident == "oai")
                 })
                 .collect();
+            let option_ty = extract_type_from_option(field_ty);
 
-            let field = match field_ty {
-                Type::Path(_) if extract_type_from_option(field_ty).is_some() => {
-                    let t = extract_type_from_option(field_ty).unwrap();
-                    maybe_field.push(field.ident.to_owned().unwrap());
-                    quote! {
-                       #(#oai_f_attributes)*
-                       pub #field_name: ::poem_openapi::types::MaybeUndefined<#t>
-                    }
-                }
-                _ => {
-                    option_field.push(field.ident.to_owned().unwrap());
-                    quote! {
-                        #(#oai_f_attributes)*
-                        pub #field_name: core::option::Option<#field_ty>
-                    }
-                }
-            };
-            fields.push(field);
+            fields_and_is_option.push((field_name, option_ty.is_some()));
+            fields.push(impl_struct_fields(
+                field_name,
+                field_ty,
+                option_ty,
+                &oai_f_attributes,
+            ));
         }),
         _ => panic!("Patch Models can only be derived for structs"),
     };
 
+    let derives = get_derive(true, derives.iter().collect());
+    let impl_from_derived = impl_from_derived(&fields_and_is_option);
+    let impl_merge = impl_merge(&fields_and_is_option);
+    let impl_weld_merge = impl_weld_merge(&impl_merge, original_name);
+
     // Generate the implementation of the PatchModel trait
     quote! {
 
-        // Define the new type
-        #[derive(Debug, Default, ::poem_openapi::Object, Clone, PartialEq, Eq, PartialOrd, Ord)]
+        /// Generated patch model of [`#original_name`]
+        #derives
         #(#oai_attr)*
         pub struct #name {
             #(#fields),*
         }
 
         impl #name  {
+            /// This is what the [`From`] trait calls internally to map between the original and generated type.
             pub fn from_derived(value: #original_name) -> Self {
                 Self {
-                    #(
-                        #maybe_field: ::poem_openapi::types::MaybeUndefined::from_opt_undefined(value.#maybe_field),
-                    )*
-                    #(
-                        #option_field: ::core::option::Option::Some(value.#option_field),
-                    )*
+                    #impl_from_derived
                 }
             }
 
-            pub fn merge_updates(self, mut value: #original_name) -> #original_name {
-                self.merge_updates_mut(&mut value);
+            /// Merges the updates into the given value, returning the updated value <br/>
+            /// The only fields to change will be the ones that are Some. <br/>
+            /// if your using the openapi feature then then only [`MaybeUndefined::Undefined`] are ingored
+            pub fn merge(self, mut value: #original_name) -> #original_name {
+                self.merge_mut(&mut value);
                 value
             }
 
-            pub fn merge_updates_mut(self, mut value: &mut #original_name) {
-                #(
-                    match self.#option_field {
-                        ::core::option::Option::Some(v) => value.#option_field = v,
-                        ::core::option::Option::None => {},
-                    }
-                )*
-                #(
-                    match self.#maybe_field {
-                        ::poem_openapi::types::MaybeUndefined::Value(v) => value.#maybe_field = ::core::option::Option::Some(v),
-                        ::poem_openapi::types::MaybeUndefined::Null => value.#maybe_field = ::core::option::Option::None,
-                        ::poem_openapi::types::MaybeUndefined::Undefined => {},
-                    }
-                )*
+            /// Mutable reference version of [`Self::merge`]
+            pub fn merge_mut(self, mut value: &mut #original_name) {
+                #impl_merge
             }
 
-            pub fn weld_updates(self, mut value: ::welds::state::DbState<#original_name>) -> ::welds::state::DbState<#original_name> {
-                self.weld_updates_mut(&mut value);
-                value
-            }
+            #impl_weld_merge
 
-            pub fn weld_updates_mut(self, mut value: &mut ::welds::state::DbState<#original_name>) {
-                #(
-                    match self.#option_field {
-                        ::core::option::Option::Some(v) => value.#option_field = v,
-                        ::core::option::Option::None => {},
-                    }
-                )*
-                #(
-                    match self.#maybe_field {
-                        ::poem_openapi::types::MaybeUndefined::Value(v) => value.#maybe_field = ::core::option::Option::Some(v),
-                        ::poem_openapi::types::MaybeUndefined::Null => value.#maybe_field = ::core::option::Option::None,
-                        ::poem_openapi::types::MaybeUndefined::Undefined => {},
-                    }
-                )*
-            }
         }
 
 
@@ -138,6 +105,135 @@ pub fn impl_patch_model_new(
             fn from(value: #original_name) -> Self {
                 #name::from_derived(value)
             }
+        }
+    }
+}
+
+fn impl_merge(fields: &[(&Ident, bool)]) -> TokenStream {
+    #[cfg(feature = "openapi")]
+    {
+        let option_field: Vec<_> = fields
+            .iter()
+            .filter_map(|(ident, is_option)| is_option.then_some(ident))
+            .collect();
+
+        let required_field: Vec<_> = fields
+            .iter()
+            .filter_map(|(ident, is_option)| (!is_option).then_some(ident))
+            .collect();
+
+        quote! {
+            #(
+                match self.#required_field {
+                    ::core::option::Option::Some(v) => value.#required_field = v,
+                    ::core::option::Option::None => {},
+                }
+            )*
+            #(
+                match self.#option_field {
+                    ::poem_openapi::types::MaybeUndefined::Value(v) => value.#option_field = ::core::option::Option::Some(v),
+                    ::poem_openapi::types::MaybeUndefined::Null => value.#option_field = ::core::option::Option::None,
+                    ::poem_openapi::types::MaybeUndefined::Undefined => {},
+                }
+            )*
+        }
+    }
+    #[cfg(not(feature = "openapi"))]
+    {
+        let field: Vec<_> = fields.iter().map(|v| v.0).collect();
+        quote! {
+            #(
+                match self.#field {
+                    ::core::option::Option::Some(v) => value.#field = v,
+                    ::core::option::Option::None => {},
+                }
+            )*
+        }
+    }
+}
+
+fn impl_from_derived(fields: &[(&Ident, bool)]) -> TokenStream {
+    #[cfg(feature = "openapi")]
+    {
+        let option_field: Vec<_> = fields
+            .iter()
+            .filter_map(|(ident, is_option)| is_option.then_some(ident))
+            .collect();
+
+        let required_field: Vec<_> = fields
+            .iter()
+            .filter_map(|(ident, is_option)| (!is_option).then_some(ident))
+            .collect();
+
+        quote! {
+            #(
+                #option_field: ::poem_openapi::types::MaybeUndefined::from_opt_undefined(value.#option_field),
+            )*
+            #(
+                #required_field: ::core::option::Option::Some(value.#required_field),
+            )*
+        }
+    }
+    #[cfg(not(feature = "openapi"))]
+    {
+        let field: Vec<_> = fields.iter().map(|v| v.0).collect();
+        quote! {
+            #(
+                #field: ::core::option::Option::Some(value.#field),
+            )*
+        }
+    }
+}
+
+#[allow(unused_variables)]
+fn impl_weld_merge(impl_merge: &TokenStream, original_name: &Ident) -> TokenStream {
+    #[cfg(feature = "weld")]
+    {
+        quote! {
+            pub fn merge_weld(self, mut value: ::welds::state::DbState<#original_name>) -> ::welds::state::DbState<#original_name> {
+                self.weld_updates_mut(&mut value);
+                value
+            }
+
+            pub fn merge_weld_mut(self, mut value: &mut ::welds::state::DbState<#original_name>) {
+                #impl_merge
+            }
+        }
+    }
+    #[cfg(not(feature = "weld"))]
+    {
+        quote!()
+    }
+}
+
+fn impl_struct_fields(
+    field_name: &Ident,
+    field_ty: &Type,
+    #[allow(unused_variables)] option_ty: Option<&Type>,
+    oai_f_attr: &Vec<&Attribute>,
+) -> TokenStream {
+    #[cfg(feature = "openapi")]
+    {
+        match option_ty {
+            Some(t) => {
+                quote! {
+                   #(#oai_f_attr)*
+                   pub #field_name: ::poem_openapi::types::MaybeUndefined<#t>
+                }
+            }
+            _ => {
+                quote! {
+                    #(#oai_f_attr)*
+                    pub #field_name: core::option::Option<#field_ty>
+                }
+            }
+        }
+    }
+    #[cfg(not(feature = "openapi"))]
+    {
+        quote! {
+            #(#oai_f_attr)*
+            pub #field_name: core::option::Option<#field_ty>
         }
     }
 }
@@ -158,17 +254,26 @@ fn parse_patch_arg(attr: &Attribute) -> PatchModelArgs {
             panic!("First argument must be an identifier (name) of the struct for the view")
         }
     };
-    
+
     if tks.len() < 3 {
-        return PatchModelArgs { name, omit: vec![] };
+        return PatchModelArgs {
+            name,
+            omit: vec![],
+            derives: vec![],
+        };
     }
 
     let args_slice = &tks[2..];
-    panic_unexpected_args(vec!["omit"], args_slice);
+    panic_unexpected_args(vec!["omit", "derives"], args_slice);
 
     let omit = parse_omit(args_slice);
+    let derives = parse_derives(args_slice);
 
-    PatchModelArgs { name, omit }
+    PatchModelArgs {
+        name,
+        omit,
+        derives,
+    }
 }
 
 fn parse_omit(args: &[TokenTree]) -> Vec<Ident> {
@@ -193,18 +298,14 @@ fn extract_type_from_option(ty: &Type) -> Option<&Type> {
     }
 
     fn extract_option_segment(path: &Path) -> Option<&PathSegment> {
-        let idents_of_path = path
-            .segments
-            .iter()
-            .into_iter()
-            .fold(String::new(), |mut acc, v| {
-                acc.push_str(&v.ident.to_string());
-                acc.push('|');
-                acc
-            });
+        let idents_of_path = path.segments.iter().fold(String::new(), |mut acc, v| {
+            acc.push_str(&v.ident.to_string());
+            acc.push('|');
+            acc
+        });
         vec!["Option|", "std|option|Option|", "core|option|Option|"]
             .into_iter()
-            .find(|s| &idents_of_path == *s)
+            .find(|s| idents_of_path == *s)
             .and_then(|_| path.segments.last())
     }
 
@@ -224,13 +325,13 @@ fn extract_type_from_option(ty: &Type) -> Option<&Type> {
         })
 }
 
-fn has_attribute(attrs: &Vec<syn::Attribute>, name: &str, value: &str) -> bool {
+fn has_attribute(attrs: &[syn::Attribute], name: &str, value: &str) -> bool {
     attrs.iter().any(|attr| {
         let path = attr.path();
         let segments = &path.segments;
 
         segments.len() == 1
-            && segments[0].ident.to_string() == name
+            && segments[0].ident == name
             && attr
                 .meta
                 .require_list()

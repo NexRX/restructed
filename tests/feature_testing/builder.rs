@@ -1,9 +1,8 @@
-#![allow(dead_code)]
-
 use restructed::Models;
 
 #[derive(Models, Clone)]
 #[patch(UserUpdatables, omit(id))]
+#[view(UserId, fields(id))]
 struct User {
     id: i32,
     display_name: String,
@@ -23,18 +22,17 @@ impl User {
 }
 
 #[test]
-fn omitted_only() {
+fn can_build() {
     let user = User::new();
 
-    let updates = UserUpdatables {
-        display_name: Some("Cooler doode".to_string()),
-        bio: None,
-        password: Some("Can't hack 'dis".to_string()),
-    };
+    let id = UserId::builder()
+        .id(user.id)
+        .build();
+    assert_eq!(&id.id, &user.id);
 
-    let updated_user = updates.merge(user.clone());
-
-    assert_ne!(user.display_name, updated_user.display_name);
-    assert_eq!(user.bio, updated_user.bio);
-    assert_ne!(user.password, updated_user.password);
+    UserUpdatables::builder()
+        .display_name(Some("Cooler doode".to_string()))
+        .bio(None)
+        .password(Some("Can't hack 'dis".to_string()))
+        .build();
 }

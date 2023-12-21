@@ -23,7 +23,7 @@ pub fn impl_view_model_new(
     } = parse_view_attributes(attr);
 
     // // Filter attr to only copy the 'oai' ones over
-    let original_name= &ast.ident;
+    let original_name = &ast.ident;
 
     let mut field_names: Vec<_> = vec![];
     let field_tokens: Vec<_> = match &ast.data {
@@ -57,8 +57,10 @@ pub fn impl_view_model_new(
         _ => panic!("PatchModel can only be derived for structs"),
     };
 
+    let derives = get_derive(true, derives.iter().collect());
+
     quote! {
-        #[derive(Debug, ::poem_openapi::Object, Clone, PartialEq, Eq, PartialOrd, Ord, sqlx::FromRow, ::typed_builder::TypedBuilder, #(#derives)*)]
+        #derives
         #(#oai_attr)*
         pub struct #name {
             #(#field_tokens),*
@@ -96,8 +98,8 @@ fn parse_view_attributes(attr: &Attribute) -> ViewModelArgs {
     let args_slice = &tks[2..];
     panic_unexpected_args(vec!["fields", "derive"], args_slice);
 
-    let fields = parse_fields(&args_slice);
-    let derives = parse_derives(&args_slice);
+    let fields = parse_fields(args_slice);
+    let derives = parse_derives(args_slice);
 
     ViewModelArgs {
         name,
@@ -115,16 +117,5 @@ fn parse_fields(args: &[TokenTree]) -> Vec<Ident> {
     };
 
     // Parse the fields argument into a TokenStream, skip checking for commas coz lazy
-    extract_idents(fields)
-}
-
-/// Parse a list of identifiers we want to derive. Will be empty if none are found.
-fn parse_derives(args: &[TokenTree]) -> Vec<Ident> {
-    // Extract the fields args and ensuring it is a key-value pair of Ident and Group
-    let fields: &Group = match get_ident_group("derive", args) {
-        Some(g) => g,
-        None => return vec![],
-    };
-
     extract_idents(fields)
 }
