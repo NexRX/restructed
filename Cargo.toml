@@ -1,6 +1,6 @@
 [package]
 name = "restructed"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 readme = "readme.md"
 authors = ["Nex <nex@nexhub.co.uk>"]
