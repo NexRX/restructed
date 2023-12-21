@@ -272,6 +272,7 @@ fn parse_patch_arg(attr: &Attribute) -> PatchModelArgs {
     let derives = parse_derives(&mut args_slice);
     let default_derives = parse_default_derives(&mut args_slice);
     panic_unexpected_args(vec!["fields", "derive", "derive_defaults"], &args_slice);
+
     PatchModelArgs {
         name,
         omit,
@@ -289,11 +290,6 @@ fn parse_omit(args: &mut Vec<TokenTree>) -> Vec<Ident> {
 
     // Parse the fields argument into a TokenStream, skip checking for commas coz lazy
     extract_idents(fields)
-}
-
-fn parse_default_derives(args: &mut Vec<TokenTree>) -> bool {
-    // Extract the fields args and ensuring it is a key-value pair of Ident and Group
-    take_ident_bool("default_derives", args).unwrap_or_default()
 }
 
 fn extract_type_from_option(ty: &Type) -> Option<&Type> {

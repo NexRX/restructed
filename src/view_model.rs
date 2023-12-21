@@ -9,6 +9,7 @@ struct ViewModelArgs {
     name: Ident,
     fields: Vec<Ident>,
     derives: Vec<Ident>,
+    default_derives: bool,
 }
 
 pub fn impl_view_model_new(
@@ -20,6 +21,7 @@ pub fn impl_view_model_new(
         name,
         fields,
         derives,
+        default_derives
     } = parse_view_attributes(attr);
 
     // // Filter attr to only copy the 'oai' ones over
@@ -57,7 +59,7 @@ pub fn impl_view_model_new(
         _ => panic!("PatchModel can only be derived for structs"),
     };
 
-    let derives = get_derive(true, derives.iter().collect());
+    let derives = get_derive(default_derives, derives.iter().collect());
 
     quote! {
         /// A generated view of the original struct with only the specified fields
@@ -97,15 +99,17 @@ fn parse_view_attributes(attr: &Attribute) -> ViewModelArgs {
         panic!("Invalid syntax, expected at least one argument");
     }
     let mut args_slice = tks[2..].to_vec();
-    panic_unexpected_args(vec!["fields", "derive"], &args_slice);
 
     let fields = parse_fields(&mut args_slice);
     let derives = parse_derives(&mut args_slice);
+    let default_derives = parse_default_derives(&mut args_slice);
+    panic_unexpected_args(vec!["fields", "derive"], &args_slice);
 
     ViewModelArgs {
         name,
         fields,
         derives,
+        default_derives,
     }
 }
 
@@ -116,7 +120,7 @@ fn parse_fields(args: &mut Vec<TokenTree>) -> Vec<Ident> {
         Some(g) => g,
         None => panic!("Missing args, expected `fields(...)"),
     };
-
+    
     // Parse the fields argument into a TokenStream, skip checking for commas coz lazy
     extract_idents(fields)
 }

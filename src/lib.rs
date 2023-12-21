@@ -173,6 +173,11 @@ fn parse_derives(args: &mut Vec<TokenTree>) -> Vec<Ident> {
     extract_idents(fields)
 }
 
+fn parse_default_derives(args: &mut Vec<TokenTree>) -> bool {
+    // Extract the fields args and ensuring it is a key-value pair of Ident and Group
+    take_ident_bool("default_derives", args).unwrap_or(true)
+}
+
 fn get_derive(defaults: bool, from_args: Vec<&Ident>) -> proc_macro2::TokenStream {
     let mut derives: Vec<proc_macro2::TokenStream> = vec![];
 
