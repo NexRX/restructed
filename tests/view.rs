@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use nexhub_macros::Models;
+use restructed::Models;
 
 #[derive(Models)]
 #[view(UserProfile, fields(display_name, bio))]
