@@ -1,10 +1,10 @@
-name: Rust
+name: Test
 
 on:
   push:
-    branches: [ "main" ]
+    branches: "**"
   pull_request:
-    branches: [ "main" ]
+    branches: "**"
 
 env:
   CARGO_TERM_COLOR: always
