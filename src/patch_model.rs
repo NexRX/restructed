@@ -1,5 +1,5 @@
 use crate::*;
-use proc_macro2::{Ident, TokenStream, TokenTree};
+use proc_macro2::{Group, Ident, TokenStream, TokenTree};
 use quote::quote;
 use syn::{Attribute, DeriveInput, Type};
 
@@ -7,6 +7,7 @@ struct PatchModelArgs {
     name: Ident,
     omit: Vec<Ident>,
     derives: Vec<Ident>,
+    default_derives: bool,
 }
 
 pub fn impl_patch_model_new(
@@ -18,6 +19,7 @@ pub fn impl_patch_model_new(
         name,
         omit,
         derives,
+        default_derives,
     } = parse_patch_arg(attr);
 
     let original_name = &ast.ident;
@@ -60,7 +62,7 @@ pub fn impl_patch_model_new(
         _ => panic!("Patch Models can only be derived for structs"),
     };
 
-    let derives = get_derive(true, derives.iter().collect());
+    let derives = get_derive(default_derives, derives.iter().collect());
     let impl_from_derived = impl_from_derived(&fields_and_is_option);
     let impl_merge = impl_merge(&fields_and_is_option);
     let impl_weld_merge = impl_weld_merge(&impl_merge, original_name);
@@ -260,31 +262,38 @@ fn parse_patch_arg(attr: &Attribute) -> PatchModelArgs {
             name,
             omit: vec![],
             derives: vec![],
+            default_derives: true,
         };
     }
 
-    let args_slice = &tks[2..];
-    panic_unexpected_args(vec!["omit", "derives"], args_slice);
+    let mut args_slice = tks[2..].to_vec();
 
-    let omit = parse_omit(args_slice);
-    let derives = parse_derives(args_slice);
-
+    let omit = parse_omit(&mut args_slice);
+    let derives = parse_derives(&mut args_slice);
+    let default_derives = parse_default_derives(&mut args_slice);
+    panic_unexpected_args(vec!["fields", "derive", "derive_defaults"], &args_slice);
     PatchModelArgs {
         name,
         omit,
         derives,
+        default_derives,
     }
 }
 
-fn parse_omit(args: &[TokenTree]) -> Vec<Ident> {
+fn parse_omit(args: &mut Vec<TokenTree>) -> Vec<Ident> {
     // Extract the fields args and ensuring it is a key-value pair of Ident and Group
-    let fields: &Group = match get_ident_group("omit", args) {
+    let fields: Group = match take_ident_group("omit", args) {
         Some(g) => g,
         None => panic!("Missing args, expected `omit(...)"),
     };
 
     // Parse the fields argument into a TokenStream, skip checking for commas coz lazy
     extract_idents(fields)
+}
+
+fn parse_default_derives(args: &mut Vec<TokenTree>) -> bool {
+    // Extract the fields args and ensuring it is a key-value pair of Ident and Group
+    take_ident_bool("default_derives", args).unwrap_or_default()
 }
 
 fn extract_type_from_option(ty: &Type) -> Option<&Type> {

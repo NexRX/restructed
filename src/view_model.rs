@@ -60,6 +60,7 @@ pub fn impl_view_model_new(
     let derives = get_derive(true, derives.iter().collect());
 
     quote! {
+        /// A generated view of the original struct with only the specified fields
         #derives
         #(#oai_attr)*
         pub struct #name {
@@ -95,11 +96,11 @@ fn parse_view_attributes(attr: &Attribute) -> ViewModelArgs {
     if tks.len() < 3 {
         panic!("Invalid syntax, expected at least one argument");
     }
-    let args_slice = &tks[2..];
-    panic_unexpected_args(vec!["fields", "derive"], args_slice);
+    let mut args_slice = tks[2..].to_vec();
+    panic_unexpected_args(vec!["fields", "derive"], &args_slice);
 
-    let fields = parse_fields(args_slice);
-    let derives = parse_derives(args_slice);
+    let fields = parse_fields(&mut args_slice);
+    let derives = parse_derives(&mut args_slice);
 
     ViewModelArgs {
         name,
@@ -109,9 +110,9 @@ fn parse_view_attributes(attr: &Attribute) -> ViewModelArgs {
 }
 
 /// Parse a list of identifiers equal to fields we want in the model. Panics if none are found.
-fn parse_fields(args: &[TokenTree]) -> Vec<Ident> {
+fn parse_fields(args: &mut Vec<TokenTree>) -> Vec<Ident> {
     // Extract the fields args and ensuring it is a key-value pair of Ident and Group
-    let fields: &Group = match get_ident_group("fields", args) {
+    let fields: Group = match take_ident_group("fields", args) {
         Some(g) => g,
         None => panic!("Missing args, expected `fields(...)"),
     };

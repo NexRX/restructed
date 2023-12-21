@@ -1,7 +1,7 @@
 use restructed::Models;
 
 #[derive(Models, Clone)]
-#[patch(UserUpdatables, omit(id))]
+#[patch(UserUpdatables, omit(id), default_derives = true)]
 #[view(UserId, fields(id))]
 struct User {
     id: i32,
