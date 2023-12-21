@@ -1,3 +1,5 @@
+#![doc = include_str!("../readme.md")]
+
 mod patch_model;
 mod view_model;
 
@@ -8,24 +10,65 @@ use syn::Attribute;
 
 // TODO: Replace panics with a compile_error
 
-/// Creates a new struct akin to a patch model version of the original model. <br />
-/// This is useful for scenarios partial data is needed (usually for updates). <br />
-/// <br />
-/// The new struct will have the same fields as the original model (unless epcified), but wrapped with: <br />
-/// - [`Option`] if the field is *required* so **not** already a [`Option`]
-/// - [`poem_openapi::types::MaybeUndefined`] if the field is *optional* so already a [`Option`]
-/// <br/><br/>
-/// # Requirements for Deriving
-/// - The struct must derive [`poem_openapi::Object`]
-/// <br/><br/>
-/// # Arguments
-/// Do note that Poem's OpenAPI are being hijacked here to provide configuration.<br/><br/>
-/// ## Struct Level
-/// All args are applied directly to the new struct.<br/><br/>
-/// ## Field Level
-/// All args are applied directly to the new struct's fields but there is one extra modification:
-/// - `#[oai(read_only)]` - Omits the field from the new struct
-
+/// Derives any number of models that are a subset of the struct deriving this macro. There are two types of models possible. <br/>
+/// # view
+///A selective subset of fields from the original model of the same types. 
+///
+///**Arguements:**
+///- `name` - The name of the struct the generate (**Required**, **Must be first** e.g. `MyStruct`)
+///- `fields` - A *list* of field names in the original structure to carry over (**Required**, e.g. `fields(field1, field2, ...)`)
+///- `derive` - A *list* of derivables (in scope) to derive on the generated struct (e.g. `derive(Clone, Debug, thiserror::Error)`)
+///- `derive_defaults` - A *bool*, if `true` *(default)* then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `derive_defaults = false`)
+///
+///**Example:**
+///```rust
+///   // Original
+///   #[view(UserProfile, fields(display_name, bio), derive(Clone), derive_defaults = false)]
+///   struct User {
+///       id: i32,
+///       display_name: String,
+///       bio: String,
+///       password: String,
+///   }
+///
+///   // Generates
+///   #[derive(Clone)]
+///   struct UserProfile {
+///       display_name: String,
+///       bio: String,
+///   }
+///```
+///
+///# patch
+///A complete subset of fields of the original model wrapped in `Option<T>` with the ability to omit instead select fields.
+///
+///**Arguements:**
+///- `name` - The name of the struct the generate (**Required**, **Must be first** e.g. `MyStruct`)
+///- `omit` - A *list* of field names in the original structure to omit (**Required**, e.g. `fields(field1, field2, ...)`)
+///- `derive` - A *list* of derivables (in scope) to derive on the generated struct (e.g. `derive(Clone, Debug, thiserror::Error)`)
+///- `derive_defaults` - A *bool*, if `true` *(default)* then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `derive_defaults = false`)
+/// 
+///   **Example:**
+///   ```rust
+///   // Original
+///   #[patch(UserUpdate, omit(id))]
+///   struct User {
+///       id: i32,
+///       display_name: String,
+///       bio: String,
+///       password: String,
+///   }
+///   
+///   // Generates
+///   #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)] // <-- Default derives (when *not* disabled)
+///   struct UserProfile {
+///       display_name: Option<String>,
+///       bio: Option<String>, // MaybeUndefined<String> with feature 'openapi'
+///       password: Option<String>,
+///   }
+///   ```
+/// 
+/// For more information, read the crate level documentation.
 #[proc_macro_derive(Models, attributes(view, patch))]
 pub fn models(input: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
