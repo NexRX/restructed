@@ -2,6 +2,10 @@
 name = "restructed"
 version = "0.1.0"
 edition = "2021"
+readme = "readme.md"
+description = "Quickly derive subsets of your structs"
+keywords = ["structs", "views", "openapi", "generated", "derived"]
+categories = ["derive-macro", "structs"]
 
 [lib]
 proc-macro = true
@@ -26,3 +30,10 @@ poem-openapi = { version = "3.0", features = [
 
 typed-builder = { version = "0.18.0", optional = true }
 welds = { version = "0.2.1", default-features = false, optional = true}
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[package.metadata.workspaces]
+independent = true

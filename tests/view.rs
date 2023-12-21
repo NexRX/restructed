@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+extern crate restructed;
 
 use restructed::Models;
 
