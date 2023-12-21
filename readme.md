@@ -7,13 +7,13 @@
       alt="GitHub Repo" />
   </a>
   <!-- Crates version -->
-  <a href="https://crates.io/crates/restructured">
-    <img src="https://img.shields.io/crates/v/restructured.svg?style=flat-square"
+  <a href="https://crates.io/crates/restructed">
+    <img src="https://img.shields.io/crates/v/restructed.svg?style=flat-square"
     alt="Crates.io version" />
   </a>
   <!-- docs.rs docs -->
-  <a href="https://docs.rs/restructured">
-    <img src="https://img.shields.io/badge/restructured.svg?style=flat-square"
+  <a href="https://docs.rs/restructed">
+    <img src="https://img.shields.io/badge/restructed.svg?style=flat-square"
       alt="docs.rs docs" />
   </a>
   <a href="https://github.com/rust-secure-code/safety-dance/">
@@ -43,7 +43,7 @@ restructed = "0.1"
 alternatively run this in the project directory
 
 ```sh
-cargo add restructured
+cargo add restructed
 ```
 
 Add the import and derive it on the target struct
