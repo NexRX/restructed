@@ -3,9 +3,11 @@ name = "restructed"
 version = "0.1.0"
 edition = "2021"
 readme = "readme.md"
+authors = ["Nex <nex@nexhub.co.uk>"]
 description = "Quickly derive subsets of your structs"
 keywords = ["structs", "views", "openapi", "generated", "derived"]
 categories = ["derive-macro", "structs"]
+license = "The Unlicense"
 
 [lib]
 proc-macro = true
