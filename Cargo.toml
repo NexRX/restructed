@@ -1,0 +1,32 @@
+[package]
+name = "restructed"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[features]
+default = ["openapi"]
+openapi = ["dep:poem-openapi"]
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["parsing"] }
+
+
+# Supported Crates
+poem-openapi = { version = "3.0", features = [
+    "uuid",
+    "chrono",
+], optional = true }
+
+welds = { version = "0.2.1", default-features = false }
+sqlx = { version = "0.7", features = [
+    "uuid",
+    "json",
+    "chrono",
+    "postgres",
+], default-features = false }
+typed-builder = "0.18.0"
