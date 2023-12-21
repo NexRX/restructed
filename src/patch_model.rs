@@ -189,7 +189,7 @@ fn impl_from_derived(fields: &[(&Ident, bool)]) -> TokenStream {
 
 #[allow(unused_variables)]
 fn impl_weld_merge(impl_merge: &TokenStream, original_name: &Ident) -> TokenStream {
-    #[cfg(feature = "weld")]
+    #[cfg(feature = "welds")]
     {
         quote! {
             /// Creates a new [`DbState`] from the given value, merging the updates into the given value, returning the updated value
@@ -204,7 +204,7 @@ fn impl_weld_merge(impl_merge: &TokenStream, original_name: &Ident) -> TokenStre
             }
         }
     }
-    #[cfg(not(feature = "weld"))]
+    #[cfg(not(feature = "welds"))]
     {
         quote!()
     }
