@@ -7,7 +7,7 @@ authors = ["Nex <nex@nexhub.co.uk>"]
 description = "Quickly derive subsets of your structs"
 keywords = ["structs", "views", "openapi", "generated", "derived"]
 categories = ["derive-macro", "structs"]
-license = "The Unlicense"
+license = "Unlicense"
 license-file = "license.txt"
 
 [lib]
