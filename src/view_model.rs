@@ -1,4 +1,3 @@
-
 use core::panic;
 
 use crate::*;
@@ -22,7 +21,7 @@ pub fn impl_view_model_new(
         name,
         fields,
         derives,
-        default_derives
+        default_derives,
     } = parse_view_attributes(attr);
 
     // // Filter attr to only copy the 'oai' ones over
@@ -104,7 +103,7 @@ fn parse_view_attributes(attr: &Attribute) -> ViewModelArgs {
     let fields = parse_fields(&mut args_slice);
     let derives = parse_derives(&mut args_slice);
     let default_derives = parse_default_derives(&mut args_slice);
-    panic_unexpected_args(vec!["fields", "derive"], &args_slice);
+    panic_unexpected_args(vec!["fields", "derive", "default_derives"], &args_slice);
 
     ViewModelArgs {
         name,
@@ -121,7 +120,7 @@ fn parse_fields(args: &mut Vec<TokenTree>) -> Vec<Ident> {
         Some(g) => g,
         None => panic!("Missing args, expected `fields(...)"),
     };
-    
+
     // Parse the fields argument into a TokenStream, skip checking for commas coz lazy
     extract_idents(fields)
 }

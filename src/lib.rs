@@ -18,20 +18,22 @@ use syn::Attribute;
 ///- `name` - The name of the struct the generate (**Required**, **Must be first** e.g. `MyStruct`)
 ///- `fields` - A *list* of field names in the original structure to carry over (**Required**, e.g. `fields(field1, field2, ...)`)
 ///- `derive` - A *list* of derivables (in scope) to derive on the generated struct (e.g. `derive(Clone, Debug, thiserror::Error)`)
-///- `derive_defaults` - A *bool*, if `true` *(default)* then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `derive_defaults = false`)
+///- `default_derives` - A *bool*, if `true` *(default)* then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `default_derives = false`)
 ///
 ///**Example:**
 ///```rust
 ///   // Original
-///   #[view(UserProfile, fields(display_name, bio), derive(Clone), derive_defaults = false)]
+///   #[derive(restructed::Models)]
+///   #[view(UserProfile, fields(display_name, bio), derive(Clone), default_derives = false)]
 ///   struct User {
 ///       id: i32,
 ///       display_name: String,
 ///       bio: String,
 ///       password: String,
 ///   }
-///
-///   // Generates
+///```
+///Generates:
+///```rust
 ///   #[derive(Clone)]
 ///   struct UserProfile {
 ///       display_name: String,
@@ -46,27 +48,30 @@ use syn::Attribute;
 ///- `name` - The name of the struct the generate (**Required**, **Must be first** e.g. `MyStruct`)
 ///- `omit` - A *list* of field names in the original structure to omit (**Required**, e.g. `fields(field1, field2, ...)`)
 ///- `derive` - A *list* of derivables (in scope) to derive on the generated struct (e.g. `derive(Clone, Debug, thiserror::Error)`)
-///- `derive_defaults` - A *bool*, if `true` *(default)* then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `derive_defaults = false`)
+///- `default_derives` - A *bool*, if `true` *(default)* then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `default_derives = false`)
 /// 
-///   **Example:**
-///   ```rust
+///**Example:**
+///```rust
 ///   // Original
+///   #[derive(restructed::Models)]
 ///   #[patch(UserUpdate, omit(id))]
 ///   struct User {
-///       id: i32,
-///       display_name: String,
-///       bio: String,
-///       password: String,
+///      id: i32,
+///      display_name: String,
+///      bio: String,
+///      password: String,
 ///   }
-///   
-///   // Generates
+///```
+/// 
+///Generates:
+///```rust
 ///   #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)] // <-- Default derives (when *not* disabled)
-///   struct UserProfile {
+///   struct UserUpdate {
 ///       display_name: Option<String>,
 ///       bio: Option<String>, // MaybeUndefined<String> with feature 'openapi'
 ///       password: Option<String>,
 ///   }
-///   ```
+///```
 /// 
 /// For more information, read the crate level documentation.
 #[proc_macro_derive(Models, attributes(view, patch))]

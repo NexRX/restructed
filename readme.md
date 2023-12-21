@@ -13,7 +13,7 @@
   </a>
   <!-- docs.rs docs -->
   <a href="https://docs.rs/restructed">
-    <img src="https://img.shields.io/badge/restructed.svg?style=flat-square"
+    <img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square"
       alt="docs.rs docs" />
   </a>
   <a href="https://github.com/rust-secure-code/safety-dance/">
@@ -51,7 +51,7 @@ Add the import and derive it on the target struct
 ```rust
 use restructed::Models;
 
-#[derive(Models)]
+#[derive(restructed::Models)]
 struct User {
     id: i32,
     username: String
@@ -62,7 +62,7 @@ struct User {
 And then add attributes for each model you want to create.
 
 ```rust
-#[derive(Models)]
+#[derive(restructed::Models)]
 #[patch(UserUpdatables, omit(id))] // <-- Wraps all fields in a new struct with Option
 #[view(UserId, fields(id))]        // <-- Selectively includes fields in a new struct
 struct User {
@@ -88,58 +88,59 @@ A selective subset of fields from the original model of the same types.
 - `name` - The name of the struct the generate (**Required**, **Must be first** e.g. `MyStruct`)
 - `fields` - A _list_ of field names in the original structure to carry over (**Required**, e.g. `fields(field1, field2, ...)`)
 - `derive` - A _list_ of derivables (in scope) to derive on the generated struct (e.g. `derive(Clone, Debug, thiserror::Error)`)
-- `derive_defaults` - A _bool_, if `true` _(default)_ then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `derive_defaults = false`)
+- `default_derives` - A *bool*, if `true` *(default)* then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `default_derives = false`)
 
 **Example:**
-
 ```rust
-// Original
-#[view(UserProfile, fields(display_name, bio), derive(Clone), derive_defaults = false)]
-struct User {
-    id: i32,
-    display_name: String,
-    bio: String,
-    password: String,
-}
-
-// Generates
-#[derive(Clone)]
-struct UserProfile {
-    display_name: String,
-    bio: String,
-}
+   // Original
+   #[derive(restructed::Models)]
+   #[view(UserProfile, fields(display_name, bio), derive(Clone), default_derives = false)]
+   struct User {
+       id: i32,
+       display_name: String,
+       bio: String,
+       password: String,
+   }
+```
+Generates:
+```rust
+   #[derive(Clone)]
+   struct UserProfile {
+       display_name: String,
+       bio: String,
+   }
 ```
 
-### `patch`
-
+# patch
 A complete subset of fields of the original model wrapped in `Option<T>` with the ability to omit instead select fields.
 
 **Arguements:**
-
 - `name` - The name of the struct the generate (**Required**, **Must be first** e.g. `MyStruct`)
-- `omit` - A _list_ of field names in the original structure to omit (**Required**, e.g. `fields(field1, field2, ...)`)
-- `derive` - A _list_ of derivables (in scope) to derive on the generated struct (e.g. `derive(Clone, Debug, thiserror::Error)`)
-- `derive_defaults` - A _bool_, if `true` _(default)_ then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `derive_defaults = false`)
-
+- `omit` - A *list* of field names in the original structure to omit (**Required**, e.g. `fields(field1, field2, ...)`)
+- `derive` - A *list* of derivables (in scope) to derive on the generated struct (e.g. `derive(Clone, Debug, thiserror::Error)`)
+- `default_derives` - A *bool*, if `true` *(default)* then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `default_derives = false`)
+ 
 **Example:**
-
 ```rust
-// Original
-#[patch(UserUpdate, omit(id))]
-struct User {
-    id: i32,
-    display_name: String,
-    bio: String,
-    password: String,
-}
-
-// Generates
-#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)] // <-- Default derives (when *not* disabled)
-struct UserProfile {
-    display_name: Option<String>,
-    bio: Option<String>, // MaybeUndefined<String> with feature 'openapi'
-    password: Option<String>,
-}
+   // Original
+   #[derive(restructed::Models)]
+   #[patch(UserUpdate, omit(id))]
+   struct User {
+      id: i32,
+      display_name: String,
+      bio: String,
+      password: String,
+   }
+```
+ 
+Generates:
+```rust
+   #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)] // <-- Default derives (when *not* disabled)
+   struct UserUpdate {
+       display_name: Option<String>,
+       bio: Option<String>, // MaybeUndefined<String> with feature 'openapi'
+       password: Option<String>,
+   }
 ```
 
 ## Crate Features

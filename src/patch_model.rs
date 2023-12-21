@@ -271,7 +271,7 @@ fn parse_patch_arg(attr: &Attribute) -> PatchModelArgs {
     let omit = parse_omit(&mut args_slice);
     let derives = parse_derives(&mut args_slice);
     let default_derives = parse_default_derives(&mut args_slice);
-    panic_unexpected_args(vec!["fields", "derive", "derive_defaults"], &args_slice);
+    panic_unexpected_args(vec!["fields", "derive", "default_derives"], &args_slice);
 
     PatchModelArgs {
         name,
