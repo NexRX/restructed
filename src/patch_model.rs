@@ -10,7 +10,7 @@ struct PatchModelArgs {
     default_derives: bool,
 }
 
-pub fn impl_patch_model_new(
+pub fn impl_patch_model(
     ast: &DeriveInput,
     attr: &Attribute,
     oai_attr: &Vec<&Attribute>,
@@ -285,7 +285,7 @@ fn parse_omit(args: &mut Vec<TokenTree>) -> Vec<Ident> {
     // Extract the fields args and ensuring it is a key-value pair of Ident and Group
     let fields: Group = match take_ident_group("omit", args) {
         Some(g) => g,
-        None => panic!("Missing args, expected `omit(...)"),
+        None => return vec![],
     };
 
     // Parse the fields argument into a TokenStream, skip checking for commas coz lazy

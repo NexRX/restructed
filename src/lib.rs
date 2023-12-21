@@ -84,14 +84,14 @@ pub fn models(input: TokenStream) -> TokenStream {
         .attrs
         .iter()
         .filter(|v| is_attribute(v, "view"))
-        .map(|a| view_model::impl_view_model_new(&ast, a, &oai_attr))
+        .map(|a| view_model::impl_view_model(&ast, a, &oai_attr))
         .collect();
 
     let patches: Vec<proc_macro2::TokenStream> = ast
         .attrs
         .iter()
         .filter(|v| is_attribute(v, "patch"))
-        .map(|a| patch_model::impl_patch_model_new(&ast, a, &oai_attr))
+        .map(|a| patch_model::impl_patch_model(&ast, a, &oai_attr))
         .collect();
 
     let gen = quote::quote!(

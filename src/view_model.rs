@@ -12,7 +12,7 @@ struct ViewModelArgs {
     default_derives: bool,
 }
 
-pub fn impl_view_model_new(
+pub fn impl_view_model(
     ast: &DeriveInput,
     attr: &Attribute,
     oai_attr: &Vec<&Attribute>,
