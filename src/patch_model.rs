@@ -192,11 +192,13 @@ fn impl_weld_merge(impl_merge: &TokenStream, original_name: &Ident) -> TokenStre
     #[cfg(feature = "weld")]
     {
         quote! {
+            /// Creates a new [`DbState`] from the given value, merging the updates into the given value, returning the updated value
             pub fn merge_weld(self, mut value: ::welds::state::DbState<#original_name>) -> ::welds::state::DbState<#original_name> {
-                self.weld_updates_mut(&mut value);
+                self.merge_weld_mut(&mut value);
                 value
             }
 
+            /// Mutable reference version of [`Self::merge_weld`]
             pub fn merge_weld_mut(self, mut value: &mut ::welds::state::DbState<#original_name>) {
                 #impl_merge
             }
