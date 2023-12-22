@@ -5,14 +5,13 @@ mod view_model;
 
 use proc_macro::TokenStream;
 use proc_macro2::{Group, Ident, TokenTree};
+use proc_macro_error::{abort, proc_macro_error};
 use quote::quote;
 use syn::Attribute;
 
-// TODO: Replace panics with a compile_error
-
 /// Derives any number of models that are a subset of the struct deriving this macro. There are two types of models possible. <br/>
 /// # view
-///A selective subset of fields from the original model of the same types. 
+///A selective subset of fields from the original model of the same types.
 ///
 ///**Arguements:**
 ///- `name` - The name of the struct the generate (**Required**, **Must be first** e.g. `MyStruct`)
@@ -49,7 +48,7 @@ use syn::Attribute;
 ///- `omit` - A *list* of field names in the original structure to omit (**Required**, e.g. `fields(field1, field2, ...)`)
 ///- `derive` - A *list* of derivables (in scope) to derive on the generated struct (e.g. `derive(Clone, Debug, thiserror::Error)`)
 ///- `default_derives` - A *bool*, if `true` *(default)* then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `default_derives = false`)
-/// 
+///
 ///**Example:**
 ///```rust
 ///   // Original
@@ -62,7 +61,7 @@ use syn::Attribute;
 ///      password: String,
 ///   }
 ///```
-/// 
+///
 ///Generates:
 ///```rust
 ///   #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)] // <-- Default derives (when *not* disabled)
@@ -72,8 +71,9 @@ use syn::Attribute;
 ///       password: Option<String>,
 ///   }
 ///```
-/// 
+///
 /// For more information, read the crate level documentation.
+#[proc_macro_error]
 #[proc_macro_derive(Models, attributes(view, patch))]
 pub fn models(input: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
@@ -123,6 +123,8 @@ fn get_attribute_name(attr: &Attribute) -> Option<&Ident> {
     attr.meta.path().segments.first().map(|v| &v.ident)
 }
 
+//  "Invalid or missing `{name}` argument, expected a group of args, e.g. `{name}(...)`"
+
 /// Extract a group for a given identifier, e.g. `name(...)`. The `(...)` part is returned.
 fn take_ident_group(name: &str, args: &mut Vec<TokenTree>) -> Option<Group> {
     for (i, tk) in args.iter().enumerate() {
@@ -137,9 +139,7 @@ fn take_ident_group(name: &str, args: &mut Vec<TokenTree>) -> Option<Group> {
                     }
                     return Some(g);
                 },
-                _ => panic!(
-                    "Invalid or missing `{name}` argument, expected a group of args, e.g. `{name}(...)`"
-                ),
+                e => abort!(e, "Invalid or missing `{name}` argument, expected a group of args, e.g. `{name}(...)`"),
             },
             _ => {}
         }
@@ -159,8 +159,8 @@ fn take_ident_bool(name: &str, args: &mut Vec<TokenTree>) -> Option<bool> {
                         .unwrap_or("Nothing".to_string());
                     let b =  match value == "true" || value == "false" {
                         true => value == "true",
-                        false => panic!(
-                            "Invalid or missing `{name}` argument, expected a bool, e.g. `{name} = true`"
+                        false => abort!(
+                           tk, "Invalid or missing `{name}` argument, expected a bool, e.g. `{name} = true`"
                         )
                     };
 
@@ -172,7 +172,8 @@ fn take_ident_bool(name: &str, args: &mut Vec<TokenTree>) -> Option<bool> {
                     }
                     return Some(b);
                 }
-                _ => panic!(
+                _ => abort!(
+                    tk,
                     "Invalid or missing `{name}` argument, expected a bool, e.g. `{name} = true`"
                 ),
             },
@@ -190,20 +191,22 @@ fn extract_idents(group: Group) -> Vec<Ident> {
         .filter_map(|tt| match tt {
             TokenTree::Ident(ident) => Some(ident),
             TokenTree::Punct(v) if v.as_char() == ',' => None,
-            tt => panic!("Invalid syntax, expected a field identifier, got {}`", tt),
+            tt => abort!(tt, "Invalid syntax, expected a field identifier, got {tt}`"),
         })
         .collect()
 }
 
-/// Panics on unexpected args to show that they arent valid
-fn panic_unexpected_args(names: Vec<&str>, args: &[TokenTree]) {
+/// Aborts on unexpected args to show that they arent valid
+fn abort_unexpected_args(names: Vec<&str>, args: &[TokenTree]) {
     for tk in args.iter() {
         match tk {
             TokenTree::Ident(v) if names.contains(&v.to_string().as_str()) => {}
             TokenTree::Ident(v) => {
-                panic!(
+                abort!(
+                    v,
                     "Unknown argument `{}`, all known arguments are {:?}",
-                    v, names
+                    v,
+                    names
                 )
             }
             _ => {}

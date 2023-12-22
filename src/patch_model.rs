@@ -1,7 +1,9 @@
 use crate::*;
+
 use proc_macro2::{Group, Ident, TokenStream, TokenTree};
 use quote::quote;
 use syn::{Attribute, DeriveInput, Type};
+use proc_macro_error::abort;
 
 struct PatchModelArgs {
     name: Ident,
@@ -59,7 +61,7 @@ pub fn impl_patch_model(
                 &oai_f_attributes,
             ));
         }),
-        _ => panic!("Patch Models can only be derived for structs"),
+        _ => abort!(attr, "Patch Models can only be derived for structs"),
     };
 
     let derives = get_derive(default_derives, derives.iter().collect());
@@ -254,8 +256,8 @@ fn parse_patch_arg(attr: &Attribute) -> PatchModelArgs {
 
     let name = match &tks[0] {
         TokenTree::Ident(v) => v.clone(),
-        _ => {
-            panic!("First argument must be an identifier (name) of the struct for the view")
+        x => {
+            abort!(x, "First argument must be an identifier (name) of the struct for the view")
         }
     };
 
@@ -273,7 +275,7 @@ fn parse_patch_arg(attr: &Attribute) -> PatchModelArgs {
     let omit = parse_omit(&mut args_slice);
     let derives = parse_derives(&mut args_slice);
     let default_derives = parse_default_derives(&mut args_slice);
-    panic_unexpected_args(vec!["fields", "derive", "default_derives"], &args_slice);
+    abort_unexpected_args(vec!["fields", "derive", "default_derives"], &args_slice);
 
     PatchModelArgs {
         name,

@@ -1,5 +1,3 @@
-use core::panic;
-
 use crate::*;
 use proc_macro2::{Ident, TokenTree};
 use quote::quote;
@@ -56,7 +54,7 @@ pub fn impl_view_model(
                 }
             })
             .collect(),
-        _ => panic!("PatchModel can only be derived for structs"),
+        _ => abort!(attr, "Patch Model can only be derived for structs"),
     };
 
     let derives = get_derive(default_derives, derives.iter().collect());
@@ -91,19 +89,19 @@ fn parse_view_attributes(attr: &Attribute) -> ViewModelArgs {
 
     let name = match &tks[0] {
         TokenTree::Ident(v) => v.clone(),
-        _ => {
-            panic!("First argument must be an identifier (name) of the struct for the view")
+        x => {
+            abort!(x, "First argument must be an identifier (name) of the struct for the view")
         }
     };
     if tks.len() < 3 {
-        panic!("Invalid syntax, expected at least one argument");
+        abort!(attr, "Invalid syntax, expected at least one argument");
     }
     let mut args_slice = tks[2..].to_vec();
 
-    let fields = parse_fields(&mut args_slice);
+    let fields = parse_fields(&mut args_slice, attr);
     let derives = parse_derives(&mut args_slice);
     let default_derives = parse_default_derives(&mut args_slice);
-    panic_unexpected_args(vec!["fields", "derive", "default_derives"], &args_slice);
+    abort_unexpected_args(vec!["fields", "derive", "default_derives"], &args_slice);
 
     ViewModelArgs {
         name,
@@ -113,12 +111,12 @@ fn parse_view_attributes(attr: &Attribute) -> ViewModelArgs {
     }
 }
 
-/// Parse a list of identifiers equal to fields we want in the model. Panics if none are found.
-fn parse_fields(args: &mut Vec<TokenTree>) -> Vec<Ident> {
+/// Parse a list of identifiers equal to fields we want in the model. Aborts if none are found.
+fn parse_fields(args: &mut Vec<TokenTree>, attr_spanned: &Attribute) -> Vec<Ident> {
     // Extract the fields args and ensuring it is a key-value pair of Ident and Group
     let fields: Group = match take_ident_group("fields", args) {
         Some(g) => g,
-        None => panic!("Missing args, expected `fields(...)"),
+        None => abort!(attr_spanned, "Missing args, expected `fields(...)"),
     };
 
     // Parse the fields argument into a TokenStream, skip checking for commas coz lazy
