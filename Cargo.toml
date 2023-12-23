@@ -14,7 +14,7 @@ license-file = "license.txt"
 proc-macro = true
 
 [features]
-default = ["builder"]
+default = ["builder", "openapi"]
 openapi = ["dep:poem-openapi"]
 builder = ["dep:typed-builder"]
 welds = ["dep:welds"]

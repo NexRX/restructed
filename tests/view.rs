@@ -3,6 +3,8 @@ extern crate restructed;
 
 use restructed::Models;
 
+//------------------ Structs
+
 #[derive(Models)]
 #[view(UserProfile, fields(display_name, bio))]
 struct User {
@@ -37,11 +39,35 @@ fn from_original() {
 fn only_fields() {
     let user = User::new();
 
-    let profile = UserProfile{
+    let profile = UserProfile {
         display_name: user.display_name,
         bio: user.bio,
     };
 
     assert_eq!(profile.display_name, profile.display_name);
     assert_eq!(profile.bio, profile.bio);
+}
+
+//------------------ Enums
+
+#[derive(Debug, Clone, Models)]
+#[view(ApiErrorReads, fields(NotFound, Unauthorized, InternalServerError))]
+pub enum ApiError {
+    NotFound(String),
+    ConflictX(String),
+    ConflictY(u64),
+    Unauthorized { code: u16, reason: String },
+    InternalServerError,
+}
+
+
+
+#[test]
+fn mapping_enum() {
+    let reads = ApiErrorReads::NotFound("No User".to_string());
+
+    let err: ApiError = reads.into();
+
+    let is_match = matches!(err.clone(), ApiError::NotFound(v) if v == "No User");
+    assert!(is_match, "Expected NotFound, got {:?}", err);
 }

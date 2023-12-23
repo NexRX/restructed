@@ -1,8 +1,9 @@
-use poem_openapi::types::MaybeUndefined;
+use poem_openapi::{payload::Json, types::MaybeUndefined, ApiResponse};
 use restructed::Models;
 
+//---------- Structs
 
-// Should makes it impl poem's Object
+// Should makes it impl poem's Object for structs
 #[derive(Clone, Models)]
 #[patch(UserUpdates, omit(id))]
 struct User {
@@ -26,7 +27,7 @@ impl User {
 }
 
 #[test]
-fn mapping() {
+fn mapping_struct() {
     let user = User::new();
 
     let mut update: UserUpdates = user.clone().into();
@@ -45,6 +46,39 @@ fn mapping() {
     assert_eq!(updated_user.id, user.id);
     assert_eq!(updated_user.display_name, None);
     assert_eq!(updated_user.password, user.password);
+}
 
-    assert!(true)
+//---------- Enums
+
+// There are many derives for enums in poem_openapi.
+// so you have to specify the correct derive each time sadly or it won't understand the oai attributes on the generated enum
+#[derive(Debug, Default, Clone, Models, ApiResponse)]
+#[view(
+    ApiErrorReads,
+    fields(NotFound, InternalServerError),
+    default_derives = false, // poem_openapi types don't implement stuff like PartialEq, this avoids errors
+    derive(ApiResponse, Clone)
+)]
+pub enum ApiError {
+    #[oai(status = 404)]
+    NotFound(Json<String>),
+    #[oai(status = 409)]
+    ConflictX(Json<String>),
+    #[oai(status = 409)]
+    ConflictY(Json<u64>),
+    #[oai(status = 401)]
+    Unauthorized,
+    #[default]
+    #[oai(status = 500)]
+    InternalServerError,
+}
+
+#[test]
+fn mapping_enum() {
+    let reads = ApiErrorReads::NotFound(Json("No User".to_string()));
+
+    let err: ApiError = reads.into();
+
+    let is_match = matches!(err.clone(), ApiError::NotFound(v) if v.0 == "No User");
+    assert!(is_match, "Expected NotFound, got {:?}", err);
 }

@@ -64,7 +64,7 @@ pub fn impl_patch_model(
         _ => abort!(attr, "Patch Models can only be derived for structs"),
     };
 
-    let derives = get_derive(default_derives, derives.iter().collect());
+    let derives = get_derive(default_derives, derives.iter().collect(), true);
     let impl_from_derived = impl_from_derived(&fields_and_is_option);
     let impl_merge = impl_merge(&fields_and_is_option);
     let impl_weld_merge = impl_weld_merge(&impl_merge, original_name);

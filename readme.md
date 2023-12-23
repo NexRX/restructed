@@ -79,18 +79,19 @@ Now anywhere that requires a `T: OrderStoreFilter` will also accept an `&T` or `
 
 Each model is defined using an attribute after deriving `Models` and multiple models (of the same kind) can be had with multiple attributes.
 
-### `view`
+### view
 
-A selective subset of fields from the original model of the same types.
+A selective subset of fields from the original model of the same types. Useful for generating views of a database table, etc. Supports both struct and enums
 
 **Arguements:**
 
 - `name` - The name of the struct the generate (**Required**, **Must be first** e.g. `MyStruct`)
 - `fields` - A _list_ of field names in the original structure to carry over (**Required**, e.g. `fields(field1, field2, ...)`)
 - `derive` - A _list_ of derivables (in scope) to derive on the generated struct (e.g. `derive(Clone, Debug, thiserror::Error)`)
-- `default_derives` - A *bool*, if `true` *(default)* then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `default_derives = false`)
+- `default_derives` - A _bool_, if `true` _(default)_ then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `default_derives = false`)
 
 **Example:**
+
 ```rust
    // Original
    #[derive(restructed::Models)]
@@ -102,7 +103,9 @@ A selective subset of fields from the original model of the same types.
        password: String,
    }
 ```
+
 Generates:
+
 ```rust
    #[derive(Clone)]
    struct UserProfile {
@@ -112,15 +115,19 @@ Generates:
 ```
 
 # patch
-A complete subset of fields of the original model wrapped in `Option<T>` with the ability to omit instead select fields.
+
+A complete subset of fields of the original model wrapped in `Option<T>` with the ability to omit instead select fields. <br/>
+I want to note that patch currently doesn't support enums as I don't see the use-case for it. If someone can, feel free to submit a feature request
 
 **Arguements:**
+
 - `name` - The name of the struct the generate (**Required**, **Must be first** e.g. `MyStruct`)
-- `omit` - A *list* of field names in the original structure to omit (e.g. `fields(field1, field2, ...)`)
-- `derive` - A *list* of derivables (in scope) to derive on the generated struct (e.g. `derive(Clone, Debug, thiserror::Error)`)
-- `default_derives` - A *bool*, if `true` *(default)* then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `default_derives = false`)
- 
+- `omit` - A _list_ of field names in the original structure to omit (e.g. `fields(field1, field2, ...)`)
+- `derive` - A _list_ of derivables (in scope) to derive on the generated struct (e.g. `derive(Clone, Debug, thiserror::Error)`)
+- `default_derives` - A _bool_, if `true` _(default)_ then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `default_derives = false`)
+
 **Example:**
+
 ```rust
    // Original
    #[derive(restructed::Models)]
@@ -132,8 +139,9 @@ A complete subset of fields of the original model wrapped in `Option<T>` with th
       password: String,
    }
 ```
- 
+
 Generates:
+
 ```rust
    #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)] // <-- Default derives (when *not* disabled)
    struct UserUpdate {

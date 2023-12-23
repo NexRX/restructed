@@ -1,7 +1,7 @@
 #![doc = include_str!("../readme.md")]
 
-mod patch_model;
-mod view_model;
+mod patch;
+mod view;
 
 use proc_macro::TokenStream;
 use proc_macro2::{Group, Ident, TokenTree};
@@ -84,14 +84,14 @@ pub fn models(input: TokenStream) -> TokenStream {
         .attrs
         .iter()
         .filter(|v| is_attribute(v, "view"))
-        .map(|a| view_model::impl_view_model(&ast, a, &oai_attr))
+        .map(|a| view::impl_view_model(&ast, a, &oai_attr))
         .collect();
 
     let patches: Vec<proc_macro2::TokenStream> = ast
         .attrs
         .iter()
         .filter(|v| is_attribute(v, "patch"))
-        .map(|a| patch_model::impl_patch_model(&ast, a, &oai_attr))
+        .map(|a| patch::impl_patch_model(&ast, a, &oai_attr))
         .collect();
 
     let gen = quote::quote!(
@@ -196,6 +196,19 @@ fn extract_idents(group: Group) -> Vec<Ident> {
         .collect()
 }
 
+fn extract_oai_f_attributes(attrs: &[syn::Attribute]) -> Vec<&syn::Attribute> {
+    attrs
+        .iter()
+        .filter(|attr| {
+            attr.meta
+                .path()
+                .segments
+                .first()
+                .map_or(false, |seg| seg.ident == "oai")
+        })
+        .collect()
+}
+
 /// Aborts on unexpected args to show that they arent valid
 fn abort_unexpected_args(names: Vec<&str>, args: &[TokenTree]) {
     for tk in args.iter() {
@@ -229,20 +242,25 @@ fn parse_default_derives(args: &mut Vec<TokenTree>) -> bool {
     take_ident_bool("default_derives", args).unwrap_or(true)
 }
 
-fn get_derive(defaults: bool, from_args: Vec<&Ident>) -> proc_macro2::TokenStream {
+fn get_derive(
+    defaults: bool,
+    from_args: Vec<&Ident>,
+    for_struct: bool,
+) -> proc_macro2::TokenStream {
     let mut derives: Vec<proc_macro2::TokenStream> = vec![];
 
     if defaults {
-        derives.push(quote!(
-            Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord
-        ));
-        #[cfg(feature = "openapi")]
-        {
-            derives.push(quote!(::poem_openapi::Object));
-        }
-        #[cfg(feature = "builder")]
-        {
-            derives.push(quote!(::typed_builder::TypedBuilder));
+        derives.push(quote!(Debug, Clone, PartialEq, Eq, PartialOrd, Ord));
+        if for_struct {
+            derives.push(quote!(Default));
+            #[cfg(feature = "openapi")]
+            {
+                derives.push(quote!(::poem_openapi::Object));
+            }
+            #[cfg(feature = "builder")]
+            {
+                derives.push(quote!(::typed_builder::TypedBuilder));
+            }
         }
     }
     if !from_args.is_empty() {
