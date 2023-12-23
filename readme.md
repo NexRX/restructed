@@ -116,7 +116,7 @@ Generates:
    }
 ```
 
-# patch
+### patch
 
 A complete subset of fields of the original model wrapped in `Option<T>` with the ability to omit instead select fields. <br/>
 I want to note that patch currently doesn't support enums as I don't see the use-case for it. If someone can, feel free to submit a feature request
