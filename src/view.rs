@@ -36,14 +36,16 @@ pub fn impl_view_model(
                 let field_attr: &Vec<syn::Attribute> = &field.attrs;
 
                 let vis = &field.vis;
+                let docs = extract_docs(&field.attrs);
+                let oai_f_attributes: Vec<_> = extract_oai_f_attributes(field_attr);
                 let field_name = &field.ident.as_ref().unwrap();
                 let field_ty = &field.ty;
-                let oai_f_attributes: Vec<_> = extract_oai_f_attributes(field_attr);
 
                 field_from_mapping.push(quote!(#field_name: value.#field_name));
                 quote! {
-                   #(#oai_f_attributes)*
-                   #vis #field_name: #field_ty
+                    #docs
+                    #(#oai_f_attributes)*
+                    #vis #field_name: #field_ty
                 }
             })
             .collect(),
@@ -58,6 +60,7 @@ pub fn impl_view_model(
                     let mut field_without_attrs = field.clone();
                     field_without_attrs.attrs = vec![];
 
+                    let docs = extract_docs(&field.attrs);
                     let field_name = &field.ident;
 
                     match &field.fields {
@@ -99,6 +102,7 @@ pub fn impl_view_model(
                     };
                     
                     quote! {
+                        #docs
                         #(#oai_f_attr)*
                         #field_without_attrs
                     }

@@ -8,7 +8,9 @@ use restructed::Models;
 #[derive(Models)]
 #[view(UserProfile, fields(display_name, bio))]
 struct User {
+    /// This should be omitted
     id: i32,
+    /// This shouldn't be omitted
     display_name: String,
     bio: String,
     password: String,
@@ -53,6 +55,8 @@ fn only_fields() {
 #[derive(Debug, Clone, Models)]
 #[view(ApiErrorReads, fields(NotFound, Unauthorized, InternalServerError))]
 pub enum ApiError {
+    /// This "NotFound" rustdoc will carry over <br/>
+    /// Even for multiple lines
     NotFound(String),
     ConflictX(String),
     ConflictY(u64),

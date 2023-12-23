@@ -209,6 +209,17 @@ fn extract_oai_f_attributes(attrs: &[syn::Attribute]) -> Vec<&syn::Attribute> {
         .collect()
 }
 
+fn is_doc(v: &&Attribute) -> bool {
+    v.meta.require_name_value().map_or(false, |v| {
+        v.path.segments.first().map_or(false, |v| v.ident == "doc")
+    })
+}
+
+fn extract_docs(attrs: &[Attribute]) -> proc_macro2::TokenStream {
+    let docs: Vec<_> = attrs.iter().filter(is_doc).collect();
+    quote!(#(#docs)*)
+}
+
 /// Aborts on unexpected args to show that they arent valid
 fn abort_unexpected_args(names: Vec<&str>, args: &[TokenTree]) {
     for tk in args.iter() {

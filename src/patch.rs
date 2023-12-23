@@ -1,9 +1,9 @@
 use crate::*;
 
 use proc_macro2::{Group, Ident, TokenStream, TokenTree};
+use proc_macro_error::abort;
 use quote::quote;
 use syn::{Attribute, DeriveInput, Type};
-use proc_macro_error::abort;
 
 struct PatchModelArgs {
     name: Ident,
@@ -40,7 +40,7 @@ pub fn impl_patch_model(
             }
 
             // Add
-            let field_ty = &field.ty;
+            let docs = extract_docs(&field.attrs);
             let oai_f_attributes: Vec<_> = field_attributes
                 .iter()
                 .filter(|attr| {
@@ -51,6 +51,7 @@ pub fn impl_patch_model(
                         .map_or(false, |seg| seg.ident == "oai")
                 })
                 .collect();
+            let field_ty = &field.ty;
             let option_ty = extract_type_from_option(field_ty);
 
             fields_and_is_option.push((field_name, option_ty.is_some()));
@@ -58,6 +59,7 @@ pub fn impl_patch_model(
                 field_name,
                 field_ty,
                 option_ty,
+                &docs,
                 &oai_f_attributes,
             ));
         }),
@@ -216,6 +218,7 @@ fn impl_struct_fields(
     field_name: &Ident,
     field_ty: &Type,
     #[allow(unused_variables)] option_ty: Option<&Type>,
+    docs: &TokenStream,
     oai_f_attr: &Vec<&Attribute>,
 ) -> TokenStream {
     #[cfg(feature = "openapi")]
@@ -223,12 +226,14 @@ fn impl_struct_fields(
         match option_ty {
             Some(t) => {
                 quote! {
-                   #(#oai_f_attr)*
-                   pub #field_name: ::poem_openapi::types::MaybeUndefined<#t>
+                    #docs
+                    #(#oai_f_attr)*
+                    pub #field_name: ::poem_openapi::types::MaybeUndefined<#t>
                 }
             }
             _ => {
                 quote! {
+                    #docs
                     #(#oai_f_attr)*
                     pub #field_name: core::option::Option<#field_ty>
                 }
@@ -238,6 +243,7 @@ fn impl_struct_fields(
     #[cfg(not(feature = "openapi"))]
     {
         quote! {
+            #docs
             #(#oai_f_attr)*
             pub #field_name: core::option::Option<#field_ty>
         }
@@ -257,7 +263,10 @@ fn parse_patch_arg(attr: &Attribute) -> PatchModelArgs {
     let name = match &tks[0] {
         TokenTree::Ident(v) => v.clone(),
         x => {
-            abort!(x, "First argument must be an identifier (name) of the struct for the view")
+            abort!(
+                x,
+                "First argument must be an identifier (name) of the struct for the view"
+            )
         }
     };
 
