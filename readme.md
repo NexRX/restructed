@@ -30,6 +30,8 @@ A quick and easy way to create derivative models of your existing types without 
 - Allows generating multiple structs from one derive
 - Automatically generates `From<T>` traits for original <> generated structs
 
+New features planned are available [here](https://github.com/NexRX/restructed/issues/1) on github. See below for examples of current usage & features.
+
 # Usage
 
 This library requires the `nightly` channel.
