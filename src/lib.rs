@@ -2,6 +2,7 @@
 
 mod patch;
 mod view;
+mod clone;
 
 use proc_macro::TokenStream;
 use proc_macro2::{Group, Ident, TokenTree};
@@ -74,7 +75,7 @@ use syn::Attribute;
 ///
 /// For more information, read the crate level documentation.
 #[proc_macro_error]
-#[proc_macro_derive(Models, attributes(view, patch))]
+#[proc_macro_derive(Models, attributes(view, patch, clone))]
 pub fn models(input: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
 
@@ -94,9 +95,17 @@ pub fn models(input: TokenStream) -> TokenStream {
         .map(|a| patch::impl_patch_model(&ast, a, &oai_attr))
         .collect();
 
+    // let clones: Vec<proc_macro2::TokenStream> = ast
+    //     .attrs
+    //     .iter()
+    //     .filter(|v| is_attribute(v, "clone"))
+    //     .map(|a| clone::impl_clone_model(&ast, a))
+    //     .collect();
+
     let gen = quote::quote!(
         #(#views)*
         #(#patches)*
+        // #(#clones)*
     );
 
     gen.into()
