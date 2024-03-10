@@ -1,11 +1,14 @@
-use poem_openapi::{payload::Json, types::MaybeUndefined, ApiResponse};
+#![allow(dead_code)]
+
+use poem_openapi::{payload::Json, types::MaybeUndefined, ApiResponse, Object};
 use restructed::Models;
 
 //---------- Structs
 
 // Should makes it impl poem's Object for structs
-#[derive(Clone, Models)]
-#[patch(UserUpdates, omit(id))]
+#[derive(Clone, Object, Models)]
+#[oai(skip_serializing_if_is_none, rename_all = "camelCase")]
+#[patch(UserUpdates, omit(id), attributes_with = "oai", option = MaybeUndefined, derive(Object))]
 struct User {
     id: i32,
     display_name: Option<String>,
@@ -48,6 +51,25 @@ fn mapping_struct() {
     assert_eq!(updated_user.password, user.password);
 }
 
+//---------- Structs - Preset Read/Write
+
+// Should makes it impl poem's Object for structs
+#[derive(Clone, Debug, Object, Models, PartialEq, Eq)]
+#[oai(skip_serializing_if_is_none, rename_all = "camelCase")]
+#[patch(UserUpdatable, preset = "write", derive(Object))]
+#[patch(UserViewables, preset = "read", derive(Object))]
+#[view(UserUpdated, preset = "write", derive(Object))]
+#[view(UserRecord, preset = "read", derive(Object))]
+struct UserPre {
+    #[oai(read_only)]
+    id: i32,
+    display_name: Option<String>,
+    bio: String,
+    extra: Option<String>,
+    #[oai(write_only)]
+    password: Option<String>,
+}
+
 //---------- Enums
 
 // There are many derives for enums in poem_openapi.
@@ -56,7 +78,7 @@ fn mapping_struct() {
 #[view(
     ApiErrorReads,
     fields(NotFound, InternalServerError),
-    default_derives = false, // poem_openapi types don't implement stuff like PartialEq, this avoids errors
+    attributes_with = "oai",
     derive(ApiResponse, Clone)
 )]
 pub enum ApiError {

@@ -1,28 +1,26 @@
-use crate::*;
-
-use proc_macro2::{Group, Ident, TokenStream, TokenTree};
+use crate::logic::{
+    args::{AttrArgs, OptionType},
+    *,
+};
+use proc_macro2::{Ident, TokenStream};
 use proc_macro_error::abort;
 use quote::quote;
 use syn::{Attribute, DeriveInput, Type};
 
-struct PatchModelArgs {
-    name: Ident,
-    omit: Vec<Ident>,
-    derives: Vec<Ident>,
-    default_derives: bool,
-}
-
-pub fn impl_patch_model(
-    ast: &DeriveInput,
-    attr: &Attribute,
-    oai_attr: &Vec<&Attribute>,
-) -> TokenStream {
-    let PatchModelArgs {
+pub fn impl_patch_model(ast: &DeriveInput, attr: &Attribute) -> TokenStream {
+    // Argument and Variable Initialization and Prep
+    let (args, mut remainder) = AttrArgs::parse(attr, false);
+    let AttrArgs {
         name,
-        omit,
-        derives,
-        default_derives,
-    } = parse_patch_arg(attr);
+        fields: _,
+        derive,
+        preset,
+        attributes_with,
+    } = args.clone();
+
+    let option = OptionType::parse(&mut remainder).unwrap_or_else(|| preset.option());
+
+    AttrArgs::abort_unexpected(&remainder, &["option"]);
 
     let original_name = &ast.ident;
 
@@ -30,53 +28,42 @@ pub fn impl_patch_model(
     let mut fields_and_is_option: Vec<(&Ident, bool)> = vec![];
     let mut fields: Vec<_> = vec![];
     match &ast.data {
-        syn::Data::Struct(data) => data.fields.iter().for_each(|field| {
-            let field_attributes: &Vec<syn::Attribute> = &field.attrs;
-            let field_name = &field.ident.as_ref().unwrap();
+        syn::Data::Struct(data) => data
+            .fields
+            .iter()
+            .filter(|f| {
+                preset.predicate(f)
+                    && args
+                        .fields
+                        .predicate(f.ident.as_ref().expect("Field must be named"))
+            })
+            .for_each(|field| {
+                let field_name = &field.ident.as_ref().unwrap();
 
-            // Omit
-            if omit.contains(field_name) || has_attribute(field_attributes, "oai", "read_only") {
-                return;
-            }
+                // Add
+                let docs = extract_docs(&field.attrs);
+                let field_ty = &field.ty;
+                let option_ty = extract_type_from_option(field_ty);
 
-            // Add
-            let docs = extract_docs(&field.attrs);
-            let oai_f_attributes: Vec<_> = field_attributes
-                .iter()
-                .filter(|attr| {
-                    attr.meta
-                        .path()
-                        .segments
-                        .first()
-                        .map_or(false, |seg| seg.ident == "oai")
-                })
-                .collect();
-            let field_ty = &field.ty;
-            let option_ty = extract_type_from_option(field_ty);
-
-            fields_and_is_option.push((field_name, option_ty.is_some()));
-            fields.push(impl_struct_fields(
-                field_name,
-                field_ty,
-                option_ty,
-                &docs,
-                &oai_f_attributes,
-            ));
-        }),
+                fields_and_is_option.push((field_name, option_ty.is_some()));
+                fields.push(impl_struct_fields(
+                    field_name, field_ty, option_ty, &docs, option,
+                ));
+            }),
         _ => abort!(attr, "Patch Models can only be derived for structs"),
     };
 
-    let derives = get_derive(default_derives, derives.iter().collect(), true);
-    let impl_from_derived = impl_from_derived(&fields_and_is_option);
-    let impl_merge = impl_merge(&fields_and_is_option);
-    let impl_weld_merge = impl_weld_merge(&impl_merge, original_name);
+    let attributes = attributes_with.gen_top_attributes(ast);
+    let derives = gen_derive(derive.as_ref());
+    let impl_from_derived = impl_from_derived(&fields_and_is_option, option);
+    let impl_merge = impl_merge(&fields_and_is_option, option);
 
     // Generate the implementation of the PatchModel trait
     quote! {
 
         /// Generated patch model of [`#original_name`]
         #derives
-        #(#oai_attr)*
+        #(#attributes)*
         pub struct #name {
             #(#fields),*
         }
@@ -101,9 +88,6 @@ pub fn impl_patch_model(
             pub fn merge_mut(self, mut value: &mut #original_name) {
                 #impl_merge
             }
-
-            #impl_weld_merge
-
         }
 
 
@@ -115,102 +99,78 @@ pub fn impl_patch_model(
     }
 }
 
-fn impl_merge(fields: &[(&Ident, bool)]) -> TokenStream {
-    #[cfg(feature = "openapi")]
-    {
-        let option_field: Vec<_> = fields
-            .iter()
-            .filter_map(|(ident, is_option)| is_option.then_some(ident))
-            .collect();
+fn impl_merge(fields: &[(&Ident, bool)], option: OptionType) -> TokenStream {
+    match option {
+        OptionType::MaybeUndefined => {
+            let option_field: Vec<_> = fields
+                .iter()
+                .filter_map(|(ident, is_option)| is_option.then_some(ident))
+                .collect();
 
-        let required_field: Vec<_> = fields
-            .iter()
-            .filter_map(|(ident, is_option)| (!is_option).then_some(ident))
-            .collect();
+            let required_field: Vec<_> = fields
+                .iter()
+                .filter_map(|(ident, is_option)| (!is_option).then_some(ident))
+                .collect();
 
-        quote! {
-            #(
-                match self.#required_field {
-                    ::core::option::Option::Some(v) => value.#required_field = v,
-                    ::core::option::Option::None => {},
-                }
-            )*
-            #(
-                match self.#option_field {
-                    ::poem_openapi::types::MaybeUndefined::Value(v) => value.#option_field = ::core::option::Option::Some(v),
-                    ::poem_openapi::types::MaybeUndefined::Null => value.#option_field = ::core::option::Option::None,
-                    ::poem_openapi::types::MaybeUndefined::Undefined => {},
-                }
-            )*
+            quote! {
+                #(
+                    match self.#required_field {
+                        ::core::option::Option::Some(v) => value.#required_field = v,
+                        ::core::option::Option::None => {},
+                    }
+                )*
+                #(
+                    match self.#option_field {
+                        ::poem_openapi::types::MaybeUndefined::Value(v) => value.#option_field = ::core::option::Option::Some(v),
+                        ::poem_openapi::types::MaybeUndefined::Null => value.#option_field = ::core::option::Option::None,
+                        ::poem_openapi::types::MaybeUndefined::Undefined => {},
+                    }
+                )*
+            }
         }
-    }
-    #[cfg(not(feature = "openapi"))]
-    {
-        let field: Vec<_> = fields.iter().map(|v| v.0).collect();
-        quote! {
-            #(
-                match self.#field {
-                    ::core::option::Option::Some(v) => value.#field = v,
-                    ::core::option::Option::None => {},
-                }
-            )*
+        OptionType::Option => {
+            let field: Vec<_> = fields.iter().map(|v| v.0).collect();
+            quote! {
+                #(
+                    match self.#field {
+                        ::core::option::Option::Some(v) => value.#field = v,
+                        ::core::option::Option::None => {},
+                    }
+                )*
+            }
         }
     }
 }
 
-fn impl_from_derived(fields: &[(&Ident, bool)]) -> TokenStream {
-    #[cfg(feature = "openapi")]
-    {
-        let option_field: Vec<_> = fields
-            .iter()
-            .filter_map(|(ident, is_option)| is_option.then_some(ident))
-            .collect();
+fn impl_from_derived(fields: &[(&Ident, bool)], option: OptionType) -> TokenStream {
+    match option {
+        OptionType::MaybeUndefined => {
+            let option_field: Vec<_> = fields
+                .iter()
+                .filter_map(|(ident, is_option)| is_option.then_some(ident))
+                .collect();
 
-        let required_field: Vec<_> = fields
-            .iter()
-            .filter_map(|(ident, is_option)| (!is_option).then_some(ident))
-            .collect();
-
-        quote! {
-            #(
-                #option_field: ::poem_openapi::types::MaybeUndefined::from_opt_undefined(value.#option_field),
-            )*
-            #(
-                #required_field: ::core::option::Option::Some(value.#required_field),
-            )*
-        }
-    }
-    #[cfg(not(feature = "openapi"))]
-    {
-        let field: Vec<_> = fields.iter().map(|v| v.0).collect();
-        quote! {
-            #(
-                #field: ::core::option::Option::Some(value.#field),
-            )*
-        }
-    }
-}
-
-#[allow(unused_variables)]
-fn impl_weld_merge(impl_merge: &TokenStream, original_name: &Ident) -> TokenStream {
-    #[cfg(feature = "welds")]
-    {
-        quote! {
-            /// Creates a new [`DbState`] from the given value, merging the updates into the given value, returning the updated value
-            pub fn merge_weld(self, mut value: ::welds::state::DbState<#original_name>) -> ::welds::state::DbState<#original_name> {
-                self.merge_weld_mut(&mut value);
-                value
-            }
-
-            /// Mutable reference version of [`Self::merge_weld`]
-            pub fn merge_weld_mut(self, mut value: &mut ::welds::state::DbState<#original_name>) {
-                #impl_merge
+            let required_field: Vec<_> = fields
+                .iter()
+                .filter_map(|(ident, is_option)| (!is_option).then_some(ident))
+                .collect();
+            quote! {
+                #(
+                    #option_field: ::poem_openapi::types::MaybeUndefined::from_opt_undefined(value.#option_field),
+                )*
+                #(
+                    #required_field: ::core::option::Option::Some(value.#required_field),
+                )*
             }
         }
-    }
-    #[cfg(not(feature = "welds"))]
-    {
-        quote!()
+        OptionType::Option => {
+            let field: Vec<_> = fields.iter().map(|v| v.0).collect();
+            quote! {
+                #(
+                    #field: ::core::option::Option::Some(value.#field),
+                )*
+            }
+        }
     }
 }
 
@@ -219,90 +179,30 @@ fn impl_struct_fields(
     field_ty: &Type,
     #[allow(unused_variables)] option_ty: Option<&Type>,
     docs: &TokenStream,
-    oai_f_attr: &Vec<&Attribute>,
+    option: OptionType,
 ) -> TokenStream {
-    #[cfg(feature = "openapi")]
-    {
-        match option_ty {
+    match option {
+        OptionType::MaybeUndefined => match option_ty {
             Some(t) => {
                 quote! {
                     #docs
-                    #(#oai_f_attr)*
                     pub #field_name: ::poem_openapi::types::MaybeUndefined<#t>
                 }
             }
             _ => {
                 quote! {
                     #docs
-                    #(#oai_f_attr)*
                     pub #field_name: core::option::Option<#field_ty>
                 }
             }
+        },
+        OptionType::Option => {
+            quote! {
+                #docs
+                pub #field_name: core::option::Option<#field_ty>
+            }
         }
     }
-    #[cfg(not(feature = "openapi"))]
-    {
-        quote! {
-            #docs
-            #(#oai_f_attr)*
-            pub #field_name: core::option::Option<#field_ty>
-        }
-    }
-}
-
-fn parse_patch_arg(attr: &Attribute) -> PatchModelArgs {
-    let tks = attr
-        .meta
-        .require_list()
-        .unwrap()
-        .to_owned()
-        .tokens
-        .into_iter()
-        .collect::<Vec<_>>();
-
-    let name = match &tks[0] {
-        TokenTree::Ident(v) => v.clone(),
-        x => {
-            abort!(
-                x,
-                "First argument must be an identifier (name) of the struct for the view"
-            )
-        }
-    };
-
-    if tks.len() < 3 {
-        return PatchModelArgs {
-            name,
-            omit: vec![],
-            derives: vec![],
-            default_derives: true,
-        };
-    }
-
-    let mut args_slice = tks[2..].to_vec();
-
-    let omit = parse_omit(&mut args_slice);
-    let derives = parse_derives(&mut args_slice);
-    let default_derives = parse_default_derives(&mut args_slice);
-    abort_unexpected_args(vec!["fields", "derive", "default_derives"], &args_slice);
-
-    PatchModelArgs {
-        name,
-        omit,
-        derives,
-        default_derives,
-    }
-}
-
-fn parse_omit(args: &mut Vec<TokenTree>) -> Vec<Ident> {
-    // Extract the fields args and ensuring it is a key-value pair of Ident and Group
-    let fields: Group = match take_ident_group("omit", args) {
-        Some(g) => g,
-        None => return vec![],
-    };
-
-    // Parse the fields argument into a TokenStream, skip checking for commas coz lazy
-    extract_idents(fields)
 }
 
 fn extract_type_from_option(ty: &Type) -> Option<&Type> {
@@ -341,18 +241,4 @@ fn extract_type_from_option(ty: &Type) -> Option<&Type> {
             GenericArgument::Type(ref ty) => Some(ty),
             _ => None,
         })
-}
-
-fn has_attribute(attrs: &[syn::Attribute], name: &str, value: &str) -> bool {
-    attrs.iter().any(|attr| {
-        let path = attr.path();
-        let segments = &path.segments;
-
-        segments.len() == 1
-            && segments[0].ident == name
-            && attr
-                .meta
-                .require_list()
-                .map_or(false, |v| v.tokens.to_string() == value)
-    })
 }
