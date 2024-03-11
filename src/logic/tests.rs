@@ -1,3 +1,5 @@
+//! Light testing of the logic module
+
 use super::*;
 use quote::{quote, ToTokens};
 use syn::{parse2, DeriveInput};
