@@ -1,39 +1,38 @@
 [package]
 name = "restructed"
-version = "0.1.4"
+version = "0.2.0"
 edition = "2021"
 readme = "readme.md"
 authors = ["Nex <nex@nexhub.co.uk>"]
 description = "Quickly derive subsets of your structs"
-keywords = ["structs", "views", "openapi", "generated", "derived"]
+keywords = ["view", "patch", "openapi", "derive", "restructed"]
 categories = ["derive-macro", "structs"]
 license = "Unlicense"
-license-file = "license.txt"
 
 [lib]
 proc-macro = true
 
 [features]
-default = ["builder", "openapi"]
-openapi = ["dep:poem-openapi"]
-builder = ["dep:typed-builder"]
-welds = ["dep:welds"]
+default = ["openapi"]
+openapi = []
+# builder = ["dep:typed-builder"]
+# welds = ["dep:welds"]
 
 [dependencies]
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = { version = "2.0", features = ["parsing"] }
+proc-macro-error = "1.0.4"
 
 
-# Supported Crates
-poem-openapi = { version = "3.0", features = [
+[dev-dependencies]
+# # Supported Crates
+poem-openapi = { version = "4.0", features = [
     "uuid",
     "chrono",
-], optional = true }
-
-typed-builder = { version = "0.18.0", optional = true }
-welds = { version = "0.2.1", default-features = false, optional = true}
-proc-macro-error = "1.0.4"
+] }
+# typed-builder = { version = "0.18.0" }
+# welds = { version = "0.3", default-features = false}
 
 [package.metadata.docs.rs]
 all-features = true

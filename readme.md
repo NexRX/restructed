@@ -34,8 +34,6 @@ New features planned are available [here](https://github.com/NexRX/restructed/is
 
 # Usage
 
-This library requires the `nightly` channel.
-
 Add `restructed` to your projects `Cargo.toml`:
 
 ```toml
@@ -51,8 +49,6 @@ cargo add restructed
 Add the import and derive it on the target struct
 
 ```rust
-use restructed::Models;
-
 #[derive(restructed::Models)]
 struct User {
     id: i32,
@@ -65,112 +61,185 @@ And then add attributes for each model you want to create.
 
 ```rust
 #[derive(restructed::Models)]
-#[patch(UserUpdatables, omit(id))] // <-- Wraps all fields in a new struct with Option
-#[view(UserId, fields(id))]        // <-- Selectively includes fields in a new struct
+#[view(UserId, fields(id))]        // <-- Simple subset of the deriving structs field
+#[patch(UserUpdatables, omit(id))] // <-- Wraps all fields with a Option type inside a new struct
 struct User {
     id: i32,
     username: String,
 }
 ```
 
-Continue reading for the available models and their breakdown.
+Continue reading for the available models and their breakdown and arguments in general.
 
-Now anywhere that requires a `T: OrderStoreFilter` will also accept an `&T` or `Arc<T>` where `T` implements `OrderStoreFilter`.
 
-## Models
+# Models
+These are arguments that can be applied there respective Attributes (i.e. `#[attr(args...)])`).
 
-Each model is defined using an attribute after deriving `Models` and multiple models (of the same kind) can be had with multiple attributes.
+## `#[model]`
+Used to define a *base* or *default* set of arguments to be apply to all models. Acts as a interface for taking arguments to apply more broad and *doesn't* generate any models on itself.
 
-### view
+There are two arguments possible
+### base
+A *list* of non-overridable arguments that are applied to all generated arguments that you cab build on-top off. It doesn't prevent you from using the in individual models later but it also won't allow you to undo the effect individually.
 
-A selective subset of fields from the original model of the same types. Useful for generating views of a database table, etc. Supports both struct and enums
+e.g. `#[model(base(...)]`
 
-**Arguements:**
+| Argument Name   | description                                        | Required?  | Type/Enum               | Example                           |
+|-----------------|----------------------------------------------------|------------|-------------------------|-----------------------------------|
+| **fields** or   | Field names in the original structure to include   | False      | List(Ident)             | `fields(field1, field2, ...)`     |  
+| **omit**        | Field names in the original structure to exclude   | False      | List(Ident)             | `omit(field1, field2, ...)`       |
+| derive          | Things to derive on the newly generated struct     | False      | List(Path)              | `derive(Debug, thiserror::Error)` |
 
-- `name` - The name of the struct the generate (**Required**, **Must be first** e.g. `MyStruct`)
-- `fields` - A _list_ of field names in the original structure to carry over (**Required**, e.g. `fields(field1, field2, ...)`)
-- `derive` - A _list_ of derivables (in scope) to derive on the generated struct (e.g. `derive(Clone, Debug, thiserror::Error)`)
-- `default_derives` - A _bool_, if `true` _(default)_ then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `default_derives = false`)
+### defaults
+Arguments given in this list are applied to all models where the argument isn't given. Meaning, if writen `#[model(defaults(fields(a, b)))]` and then later `#[view(omit(b))]` is written, the `fields(a, b)` earlier will not be applied because the two args are mutally exclusive unlike with *base* arguments.
 
-**Example:**
+e.g. `#[model(defaults(...))]`
 
+| Argument Name   | description                                        | Required?  | Type/Enum               | Example                           |
+|-----------------|----------------------------------------------------|------------|-------------------------|-----------------------------------|
+| **fields** or   | Field names in the original structure to include   | False      | List(Ident)             | `fields(field1, field2, ...)`     |  
+| **omit**        | Field names in the original structure to exclude   | False      | List(Ident)             | `omit(field1, field2, ...)`       |
+| derive          | Things to derive on the newly generated struct     | False      | List(Path)              | `derive(Debug, thiserror::Error)` |
+| preset          | Behaviours and/or defaults to apply                | False      | none/write/read         | `preset = "all"`                  |
+| attributes_with | Attributes to inherit at both struct & field level | False      | none/oai/deriveless/all | `attributes_with = "all"`         |
+
+
+### Example
 ```rust
-   // Original
-   #[derive(restructed::Models)]
-   #[view(UserProfile, fields(display_name, bio), derive(Clone), default_derives = false)]
-   struct User {
-       id: i32,
-       display_name: String,
-       bio: String,
-       password: String,
-   }
+#[derive(Clone, restructed::Models)]
+#[model(base(derive(Debug)))] // All models now *MUST* derive Debug (despite parent)
+#[view(UserView)]
+#[patch(UserPatch)]
+struct User {
+    id: i32,
+    display_name: String,
+    bio: String,
+    extra: Option<String>,
+    password: String,
+}
+
+fn debug_models() {
+  let user = User {
+    id: 1,
+    display_name: "Dude".to_string(),
+    bio: "Too long didn't read".to_string(),
+    extra: None,
+    password: "ezpz".to_string(),
+  };
+
+  let view: UserView = user.clone().into(); // Automatically gen from model
+  print!("A view of a user {:?}", view);
+
+  let patch: UserPatch = user.clone().into(); // Automatically gen from model
+  print!("A patch of a user {:?}", patch);
+}
 ```
 
-Generates:
+## `#[view]`
+A model with generates a subset of the original/parent deriving `Model`. Useful for creating things like RESTful API or Database views.
+
+| Argument Name   | description                                        | Required?  | Type/Enum               | Example                           |
+|-----------------|----------------------------------------------------|------------|-------------------------|-----------------------------------|
+| name            | Name of the struct the generate                    | True+First | Identifier              | `MyStruct`                        |
+| **fields** or   | Field names in the original structure to include   | False      | List(Ident)             | `fields(field1, field2, ...)`     |  
+| **omit**        | Field names in the original structure to exclude   | False      | List(Ident)             | `omit(field1, field2, ...)`       |
+| derive          | Things to derive on the newly generated struct     | False      | List(Path)              | `derive(Debug, thiserror::Error)` |
+| preset          | Behaviours and/or defaults to apply                | False      | none/write/read         | `preset = "all"`                  |
+| attributes_with | Attributes to inherit at both struct & field level | False      | none/oai/deriveless/all | `attributes_with = "all"`         |
 
 ```rust
-   #[derive(Clone)]
-   struct UserProfile {
-       display_name: String,
-       bio: String,
-   }
+#[derive(Clone, restructed::Models)]
+#[view(UserProfile, omit(id, password))]
+struct User {
+    id: i32, // Not in `UserProfile`
+    display_name: String,
+    bio: String,
+    extra: Option<String>,
+    password: String, // Not in `UserProfile`
+}
 ```
 
-### patch
+## `#[patch]`
+A model which creates subsets of your data except each field's type is wrapped in a `Option<t>` or a alternative type of Option implementation if specified. Useful for creating RESTful API patch method types or Database Table Patches where you only want to update fields if they were explictly given (even to delete).
 
-A complete subset of fields of the original model wrapped in `Option<T>` with the ability to omit instead select fields. <br/>
-I want to note that patch currently doesn't support enums as I don't see the use-case for it. If someone can, feel free to submit a feature request
-
-**Arguements:**
-
-- `name` - The name of the struct the generate (**Required**, **Must be first** e.g. `MyStruct`)
-- `omit` - A _list_ of field names in the original structure to omit (e.g. `fields(field1, field2, ...)`)
-- `derive` - A _list_ of derivables (in scope) to derive on the generated struct (e.g. `derive(Clone, Debug, thiserror::Error)`)
-- `default_derives` - A _bool_, if `true` _(default)_ then the a list of derives will be additionally derived. Otherwise, `false` to avoid this (e.g. `default_derives = false`)
-
-**Example:**
+| Argument Name   | description                                        | Required?  | Type/Enum               | Example                           |
+|-----------------|----------------------------------------------------|------------|-------------------------|-----------------------------------|
+| name            | Name of the struct the generate                    | True+First | Identifier              | `MyStruct`                        |
+| **fields** or   | Field names in the original structure to include   | False      | List(Ident)             | `fields(field1, field2, ...)`     |  
+| **omit**        | Field names in the original structure to exclude   | False      | List(Ident)             | `omit(field1, field2, ...)`       |
+| derive          | Things to derive on the newly generated struct     | False      | List(Path)              | `derive(Debug, thiserror::Error)` |
+| preset          | Behaviours and/or defaults to apply                | False      | none/write/read         | `preset = "all"`                  |
+| attributes_with | Attributes to inherit at both struct & field level | False      | none/oai/deriveless/all | `attributes_with = "all"`         |
+| option          | A alternative to `Option<T>` to wrap fields with   | False      | Option/MaybeUndefined   | `option = MaybeUndefined`         |
 
 ```rust
-   // Original
-   #[derive(restructed::Models)]
-   #[patch(UserUpdate, omit(id))]
-   struct User {
-      id: i32,
-      display_name: String,
-      bio: String,
-      password: String,
-   }
+#[derive(Clone, restructed::Models)]
+#[patch(UserUpdate, fields(display_name, bio, extra, password))]
+struct User {
+    id: i32, // Not in `UserUpdate`
+    display_name: String, // Option<String> in `UserUpdate`
+    bio: String, // Option<String> in `UserUpdate`
+    extra: Option<String>, // Option<Option<String>> in `UserUpdate` (If this isn't desired, see *option* arg and the *openapi* crate feature)
+    password: String, // Not in `UserProfile`
+}
 ```
 
-Generates:
+<br/>
 
-```rust
-   #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)] // <-- Default derives (when *not* disabled)
-   struct UserUpdate {
-       display_name: Option<String>,
-       bio: Option<String>, // MaybeUndefined<String> with feature 'openapi'
-       password: Option<String>,
-   }
-```
+# Argument Behaviours
 
-## Crate Features
+## `preset` 
+A _string literal_ of the preset to use, presets are a set of defaults to apply to a model. *Below is a list of what arguments are composed in a preset.* [e.g. `preset = "none"`] 
+  - **none** - Does nothing and is the default behaviour [**Default**]
+  - **write** *['openapi' Feature Flag]* - Designed to only show properties that can be written to.
+    - `omit` - Applied as a base, any fields with `#[oai(read_only)]` attribute are removed, your fields/omit is applied after
+    - `option` **patch only** - Arg defaults to `MaybeUndefined`
 
+  - **read** *['openapi' Feature Flag]* - Designed to only show properties that can always be read.
+    - `omit` - Applied as a base, any fields with `#[oai(write_only)]` attribute are removed, your fields/omit is applied after
+    - `option` **patch only** - arg defaults to `MaybeUndefined`
+
+## `attributes_with`
+A _string literal_ of the attributes to inherit at both struct & field level. *Below is a list of values.* [e.g. `attributes_with = "none"`] 
+  - **none** - Does not Includes any attributes [**Default**]
+  - **oai** *['openapi' Feature Flag]* - Includes all Poem's OpenAPI attributes
+  - **deriveless** - Includes all attributes but omits the derive attributes
+  - **all** - Includes all attributes
+
+# Known Limitations
+
+- *Generic Structs & Enums* - At the moment, this crate **doesn't support** deriving models on Structs that need to be generic (e.g. deriving on a `Struct<T>`). I just don't need the feature, contributions are welcome however!
+
+<br/>
+
+# Crate Features
 Links are to other crates GitHub page that are related to the features.<br/>
-Only `builder` is enabled by default.
 
-### `openapi`
+## Poem OpenAPI
+Enables wrapping `Option<T>` from the source struct with `MaybeUndefined<T>` from the [poem-openapi](https://github.com/poem-web/poem/tree/master/poem-openapi) crate in `patch` models. All `oai(...)` attributes can also be explictly copied over to the generated struct meaning you keep all validators, etc..
 
-Wraps `Option<T>` from the source struct with `MaybeUndefined<T>` from the [poem-openapi](https://github.com/poem-web/poem/tree/master/poem-openapi) crate in `patch` models. All `oai(...)` attributes are also copied over to the generated struct meaning you keep all validators, etc..
+```rust 
+use restructed::Models;
 
-### `builder`
-
-Uses the [typed-builder](https://github.com/idanarye/rust-typed-builder) crate to derive a builder for add a type safe builder for all generated models.
-
-### `welds`
-
-Generates a function to merge changes for returning a `DbState<T>` from the [welds](https://github.com/weldsorm/welds) crate.
-
-## Contributions & Bugs
-
-This is my first self publish proc macro so any feedback and feature request, changes, pull requests are all welcome! <br/>
-If you find any bugs do submit a github issue with any relavent information and I'll try to fix it.
+#[derive(poem_openapi::Object, Models)]
+#[oai(skip_serializing_if_is_none, rename_all = "camelCase")]
+#[model(base(derive(poem_openapi::Object, Debug)), defaults(preset = "read"))]
+#[patch(UserUpdate, preset = "write")]
+#[view(UserProfile)]
+#[view(UserNames, fields(username, name, surname))]
+pub struct User {
+    #[oai(read_only)]
+    pub id: u32,
+    // profile
+    #[oai(validator(min_length = 3, max_length = 16, pattern = r"^[a-zA-Z0-9_]*$"))] // oai attributes carry over with `preset = write/write` or attributes_with="oai"
+    pub username: String,
+    #[oai(validator(min_length = 5, max_length = 1024), write_only)]
+    pub password: String,
+    #[oai(validator(min_length = 2, max_length = 16, pattern = r"^[a-zA-Z\s]*$"))]
+    pub name: Option<String>,
+    #[oai(validator(min_length = 2, max_length = 16, pattern = r"^[a-zA-Z\s]*$"))]
+    pub surname: Option<String>, // in patch modeels, this is `MaybeUndefined` type with default with preset `read` or `write` (or option = MaybeUndefined)
+    #[oai(read_only)]
+    pub joined: u64,
+}
+```

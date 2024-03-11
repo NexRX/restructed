@@ -1,129 +1,54 @@
-use crate::*;
-use proc_macro2::{Ident, TokenStream, TokenTree};
+use crate::logic::{args::AttrArgs, *};
+use proc_macro2::{Ident, TokenStream};
+use proc_macro_error::abort;
 use quote::quote;
-use syn::{self, Attribute, DeriveInput};
+use syn::{self, Attribute, DataEnum, DataStruct, DeriveInput};
 
-struct ViewModelArgs {
-    name: Ident,
-    fields: Vec<Ident>,
-    derives: Vec<Ident>,
-    default_derives: bool,
-}
+use self::args::ModelAttrArgs;
 
 pub fn impl_view_model(
     ast: &DeriveInput,
     attr: &Attribute,
-    oai_attr: &Vec<&Attribute>,
+    defaults: ModelAttrArgs
 ) -> TokenStream {
-    let ViewModelArgs {
+    // Argument and Variable Initialization and Prep
+    let (args, _) = AttrArgs::parse(attr, defaults, true);
+    let AttrArgs {
         name,
-        fields,
-        derives,
-        default_derives,
-    } = parse_view_attributes(attr);
+        fields: _,
+        derive,
+        preset: _,
+        attributes_with
+    } = args.clone();
 
-    // // Filter attr to only copy the 'oai' ones over
     let original_name = &ast.ident;
-    let mut is_struct = true;
-    let mut field_from_mapping: Vec<TokenStream> = vec![];
+    let is_struct = matches!(&ast.data, syn::Data::Struct(_));
+    let mut field_mapping: Vec<TokenStream> = vec![]; // Will contain each fields `From` trait impl
 
+    // Generate Implementation
     let field_tokens: Vec<_> = match &ast.data {
-        syn::Data::Struct(data) => data
-            .fields
-            .iter()
-            .filter(|f| fields.contains(f.ident.as_ref().expect("Field(s) must be named")))
-            .map(|field| {
-                let field_attr: &Vec<syn::Attribute> = &field.attrs;
-
-                let vis = &field.vis;
-                let docs = extract_docs(&field.attrs);
-                let oai_f_attributes: Vec<_> = extract_oai_f_attributes(field_attr);
-                let field_name = &field.ident.as_ref().unwrap();
-                let field_ty = &field.ty;
-
-                field_from_mapping.push(quote!(#field_name: value.#field_name));
-                quote! {
-                    #docs
-                    #(#oai_f_attributes)*
-                    #vis #field_name: #field_ty
-                }
-            })
-            .collect(),
-        syn::Data::Enum(data) => {
-            is_struct = false;
-            data.variants
-                .iter()
-                .filter(|v| fields.contains(&v.ident))
-                .map(|field| {
-                    let oai_f_attr = get_oai_attributes(&field.attrs);
-
-                    let mut field_without_attrs = field.clone();
-                    field_without_attrs.attrs = vec![];
-
-                    let docs = extract_docs(&field.attrs);
-                    let field_name = &field.ident;
-
-                    match &field.fields {
-                        syn::Fields::Unit => {
-                            field_from_mapping.push(quote!{
-                                #name::#field_name => #original_name::#field_name
-                            });
-                        },
-                        syn::Fields::Unnamed(_) => {
-                            let variant_args: Vec<_> = field
-                                .fields
-                                .iter()
-                                .enumerate()
-                                .map(|(i, _)| {
-                                    let c = (i as u8 + b'a') as char;
-                                    // convert c to ident so it wont be quoted
-                                    let c= syn::Ident::new(&c.to_string(), proc_macro2::Span::call_site());
-
-                                    quote!(#c)
-                                })
-                                .collect();
-                            field_from_mapping.push(quote!{
-                                #name::#field_name(#(#variant_args),*) => #original_name::#field_name(#(#variant_args),*)
-                            });
-                        }
-                        syn::Fields::Named(n) => {
-                            let variant_args: Vec<_> = n
-                                .named
-                                .iter()
-                                .map(|f| {
-                                    let arg = f.ident.as_ref();
-                                    quote!(#arg)
-                                })
-                                .collect();
-                            field_from_mapping.push(quote!{
-                                #name::#field_name{#(#variant_args),*} => #original_name::#field_name{#(#variant_args),*}
-                            });
-                        },
-                    };
-                    
-                    quote! {
-                        #docs
-                        #(#oai_f_attr)*
-                        #field_without_attrs
-                    }
-                })
-                .collect()
-        }
-        _ => abort!(attr, "Patch Model can only be derived for structs & enums"),
+        syn::Data::Struct(data) => impl_for_struct(data, &mut field_mapping, &args),
+        syn::Data::Enum(data) => impl_for_enum(data, &mut field_mapping, &args, original_name),
+        syn::Data::Union(_) => abort!(attr, "Patch Model can only be derived for `struct` & `enum`, NOT `union`"),
     };
 
-    let data_type = match is_struct {
+    let structure = match is_struct {
         true => quote!(struct),
         false => quote!(enum),
     };
-    let derives = get_derive(default_derives, derives.iter().collect(), is_struct);
-    let impl_from = impl_from_trait(original_name, &name, field_from_mapping, is_struct);
+    
 
+    let attributes = attributes_with.gen_top_attributes(ast);
+    let derives = gen_derive(derive.as_ref());
+    
+    let impl_from = impl_from_trait(original_name, &name, field_mapping, is_struct);
+
+    let doc_string = format!("This is a restructured (View) model of ['{original_name}']. Refer to the original model for more structual documentation.");
     quote! {
-        /// A generated view of the original struct with only the specified fields
+        #[doc= #doc_string]
         #derives
-        #(#oai_attr)*
-        pub #data_type #name {
+        #(#attributes)*
+        pub #structure #name {
             #(#field_tokens),*
         }
 
@@ -160,51 +85,105 @@ fn impl_from_trait(
     }
 }
 
-fn parse_view_attributes(attr: &Attribute) -> ViewModelArgs {
-    let tks: Vec<TokenTree> = attr
-        .meta
-        .require_list()
-        .unwrap()
-        .to_owned()
-        .tokens
-        .into_iter()
-        .collect::<Vec<_>>();
 
-    let name = match &tks[0] {
-        TokenTree::Ident(v) => v.clone(),
-        x => {
-            abort!(
-                x,
-                "First argument must be an identifier (name) of the struct for the view"
-            )
-        }
-    };
-    if tks.len() < 3 {
-        abort!(attr, "Invalid syntax, expected at least one argument");
-    }
-    let mut args_slice = tks[2..].to_vec();
-
-    let fields = parse_fields(&mut args_slice, attr);
-    let derives = parse_derives(&mut args_slice);
-    let default_derives = parse_default_derives(&mut args_slice);
-    abort_unexpected_args(vec!["fields", "derive", "default_derives"], &args_slice);
-
-    ViewModelArgs {
-        name,
+fn impl_for_struct(data: &DataStruct, field_mapping: &mut Vec<TokenStream>, args: &AttrArgs) -> Vec<TokenStream> {
+    let AttrArgs {
+        name: _,
         fields,
-        derives,
-        default_derives,
-    }
+        derive: _,
+        preset,
+        attributes_with
+    } = args;
+
+
+    data
+            .fields
+            .iter()
+            .filter(|f| {
+                preset.predicate(f) && fields.predicate(f.ident.as_ref().expect("Field must be named")) 
+            })
+            .map(|field| {
+                let vis = &field.vis;
+                let docs = extract_docs(&field.attrs);
+                let field_name = &field.ident.as_ref().unwrap();
+                let field_ty = &field.ty;
+
+                let field_attr = attributes_with.gen_field_attributes(field.attrs.clone());
+
+                field_mapping.push(quote!(#field_name: value.#field_name));
+                quote! {
+                    #docs
+                    #(#field_attr)*
+                    #vis #field_name: #field_ty
+                }
+            })
+            .collect()
 }
 
-/// Parse a list of identifiers equal to fields we want in the model. Aborts if none are found.
-fn parse_fields(args: &mut Vec<TokenTree>, attr_spanned: &Attribute) -> Vec<Ident> {
-    // Extract the fields args and ensuring it is a key-value pair of Ident and Group
-    let fields: Group = match take_ident_group("fields", args) {
-        Some(g) => g,
-        None => abort!(attr_spanned, "Missing args, expected `fields(...)"),
-    };
+fn impl_for_enum(data: &DataEnum, field_mapping: &mut Vec<TokenStream>, args: &AttrArgs, original_name: &Ident) -> Vec<TokenStream> {
+    let AttrArgs {
+        name,
+        fields,
+        derive: _,
+        preset,
+        attributes_with
+    } = args;
 
-    // Parse the fields argument into a TokenStream, skip checking for commas coz lazy
-    extract_idents(fields)
+    data.variants
+    .iter()
+    .filter(|v| fields.predicate(&v.ident))
+    .map(|field| {
+        let mut field_impl = field.clone();
+        field_impl.attrs = attributes_with.gen_field_attributes(field_impl.attrs);
+
+        let docs = extract_docs(&field.attrs);
+        let field_name = &field.ident;
+
+        match &field.fields {
+            syn::Fields::Unit => {
+                field_mapping.push(quote!{
+                    #name::#field_name => #original_name::#field_name
+                });
+            },
+            syn::Fields::Unnamed(_) => {
+                let variant_args: Vec<_> = field
+                    .fields
+                    .iter()
+                    .filter(|f| preset.predicate(f))
+                    .enumerate()
+                    .map(|(i, _)| {
+                        let c = (i as u8 + b'a') as char;
+                        let c= syn::Ident::new(&c.to_string(), proc_macro2::Span::call_site()); // convert char to ident so it wont be "quoted"
+
+                        quote!(#c)
+                    })
+                    .collect();
+                field_mapping.push(quote!{
+                    #name::#field_name(#(#variant_args),*) => #original_name::#field_name(#(#variant_args),*)
+                });
+            }
+            syn::Fields::Named(n) => {
+                let variant_args: Vec<_> = n
+                    .named
+                    .iter()
+                    .filter(|f| preset.predicate(f))
+                    .map(|f| {
+
+                        let arg = f.ident.as_ref();
+                        quote!(#arg)
+                    })
+                    .collect();
+                field_mapping.push(quote!{
+                    #name::#field_name{#(#variant_args),*} => #original_name::#field_name{#(#variant_args),*}
+                });
+            },
+        };
+        
+        quote! {
+            #docs
+            #field_impl
+        }
+    })
+    .collect()
+
 }

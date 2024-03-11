@@ -50,6 +50,57 @@ fn only_fields() {
     assert_eq!(profile.bio, profile.bio);
 }
 
+//------------------ Structs -- attributes_with = "all"
+
+#[derive(Models)]
+#[view(UserProfileAll, fields(display_name, bio), attributes_with = "all")]
+struct UserAttrAll {
+    /// This should be omitted
+    id: i32,
+    /// This shouldn't be omitted
+    display_name: String,
+    bio: String,
+    password: String,
+}
+
+//------------------ Structs -- attributes_with = "deriveless"
+
+#[derive(Models)]
+#[view(UserProfileDeriveless, fields(display_name, bio), attributes_with = "deriveless")]
+struct UserAttrDeriveless {
+    /// This should be omitted
+    id: i32,
+    /// This shouldn't be omitted
+    display_name: String,
+    bio: String,
+    password: String,
+}
+
+//------------------ Structs -- attributes_with = "none"
+
+#[derive(Models)]
+#[view(UserProfileNone, fields(display_name, bio), attributes_with = "none")]
+struct UserAttrNone{
+    /// This should be omitted
+    id: i32,
+    /// This shouldn't be omitted
+    display_name: String,
+    bio: String,
+    password: String,
+}
+
+//------------------ Structs -- defaults
+
+#[derive(Models)]
+#[model(defaults(fields(display_name, bio), attributes_with = "none"))]
+#[view(UserProfileDefaults)]
+struct UserDefaults{
+    id: i32,
+    display_name: String,
+    bio: String,
+    password: String,
+}
+
 //------------------ Enums
 
 #[derive(Debug, Clone, Models)]
