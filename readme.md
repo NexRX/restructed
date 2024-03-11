@@ -37,7 +37,7 @@ New features planned are available [here](https://github.com/NexRX/restructed/is
 Add `restructed` to your projects `Cargo.toml`:
 
 ```toml
-restructed = "0.1"
+restructed = "0.2"
 ```
 
 alternatively run this in the project directory
