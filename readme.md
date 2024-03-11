@@ -75,8 +75,57 @@ Continue reading for the available models and their breakdown and arguments in g
 # Models
 These are arguments that can be applied there respective Attributes (i.e. `#[attr(args...)])`).
 
+## `#[view]`
+A model with generates a subset of the original/parent deriving `Model`. Useful for creating things like RESTful API or Database views.
+
+| Argument Name   | description                                        | Required?  | Type/Enum               | Example                           |
+|-----------------|----------------------------------------------------|------------|-------------------------|-----------------------------------|
+| name            | Name of the struct the generate                    | True+First | Identifier              | `MyStruct`                        |
+| **fields** or   | Field names in the original structure to include   | False      | List(Ident)             | `fields(field1, field2, ...)`     |  
+| **omit**        | Field names in the original structure to exclude   | False      | List(Ident)             | `omit(field1, field2, ...)`       |
+| derive          | Things to derive on the newly generated struct     | False      | List(Path)              | `derive(Debug, thiserror::Error)` |
+| preset          | Behaviours and/or defaults to apply                | False      | none/write/read         | `preset = "all"`                  |
+| attributes_with | Attributes to inherit at both struct & field level | False      | none/oai/deriveless/all | `attributes_with = "all"`         |
+
+```rust
+#[derive(Clone, restructed::Models)]
+#[view(UserProfile, omit(id, password))]
+struct User {
+    id: i32, // Not in `UserProfile`
+    display_name: String,
+    bio: String,
+    extra: Option<String>,
+    password: String, // Not in `UserProfile`
+}
+```
+
+## `#[patch]`
+A model which creates subsets of your data except each field's type is wrapped in a `Option<t>` or a alternative type of Option implementation if specified. Useful for creating RESTful API patch method types or Database Table Patches where you only want to update fields if they were explictly given (even to delete).
+
+| Argument Name   | description                                        | Required?  | Type/Enum               | Example                           |
+|-----------------|----------------------------------------------------|------------|-------------------------|-----------------------------------|
+| name            | Name of the struct the generate                    | True+First | Identifier              | `MyStruct`                        |
+| **fields** or   | Field names in the original structure to include   | False      | List(Ident)             | `fields(field1, field2, ...)`     |  
+| **omit**        | Field names in the original structure to exclude   | False      | List(Ident)             | `omit(field1, field2, ...)`       |
+| derive          | Things to derive on the newly generated struct     | False      | List(Path)              | `derive(Debug, thiserror::Error)` |
+| preset          | Behaviours and/or defaults to apply                | False      | none/write/read         | `preset = "all"`                  |
+| attributes_with | Attributes to inherit at both struct & field level | False      | none/oai/deriveless/all | `attributes_with = "all"`         |
+| option          | A alternative to `Option<T>` to wrap fields with   | False      | Option/MaybeUndefined   | `option = MaybeUndefined`         |
+
+```rust
+#[derive(Clone, restructed::Models)]
+#[patch(UserUpdate, fields(display_name, bio, extra, password))]
+struct User {
+    id: i32, // Not in `UserUpdate`
+    display_name: String, // Option<String> in `UserUpdate`
+    bio: String, // Option<String> in `UserUpdate`
+    extra: Option<String>, // Option<Option<String>> in `UserUpdate` (If this isn't desired, see *option* arg and the *openapi* crate feature)
+    password: String, // Not in `UserProfile`
+}
+```
+
 ## `#[model]`
-Used to define a *base* or *default* set of arguments to be apply to all models. Acts as a interface for taking arguments to apply more broad and *doesn't* generate any models on itself.
+Not a model, used to define a *base* or *default* set of arguments to be apply to all models. Acts as a interface for taking arguments to apply more broad and *doesn't* generate any models itself.
 
 There are two arguments possible
 ### base
@@ -135,54 +184,6 @@ fn debug_models() {
 }
 ```
 
-## `#[view]`
-A model with generates a subset of the original/parent deriving `Model`. Useful for creating things like RESTful API or Database views.
-
-| Argument Name   | description                                        | Required?  | Type/Enum               | Example                           |
-|-----------------|----------------------------------------------------|------------|-------------------------|-----------------------------------|
-| name            | Name of the struct the generate                    | True+First | Identifier              | `MyStruct`                        |
-| **fields** or   | Field names in the original structure to include   | False      | List(Ident)             | `fields(field1, field2, ...)`     |  
-| **omit**        | Field names in the original structure to exclude   | False      | List(Ident)             | `omit(field1, field2, ...)`       |
-| derive          | Things to derive on the newly generated struct     | False      | List(Path)              | `derive(Debug, thiserror::Error)` |
-| preset          | Behaviours and/or defaults to apply                | False      | none/write/read         | `preset = "all"`                  |
-| attributes_with | Attributes to inherit at both struct & field level | False      | none/oai/deriveless/all | `attributes_with = "all"`         |
-
-```rust
-#[derive(Clone, restructed::Models)]
-#[view(UserProfile, omit(id, password))]
-struct User {
-    id: i32, // Not in `UserProfile`
-    display_name: String,
-    bio: String,
-    extra: Option<String>,
-    password: String, // Not in `UserProfile`
-}
-```
-
-## `#[patch]`
-A model which creates subsets of your data except each field's type is wrapped in a `Option<t>` or a alternative type of Option implementation if specified. Useful for creating RESTful API patch method types or Database Table Patches where you only want to update fields if they were explictly given (even to delete).
-
-| Argument Name   | description                                        | Required?  | Type/Enum               | Example                           |
-|-----------------|----------------------------------------------------|------------|-------------------------|-----------------------------------|
-| name            | Name of the struct the generate                    | True+First | Identifier              | `MyStruct`                        |
-| **fields** or   | Field names in the original structure to include   | False      | List(Ident)             | `fields(field1, field2, ...)`     |  
-| **omit**        | Field names in the original structure to exclude   | False      | List(Ident)             | `omit(field1, field2, ...)`       |
-| derive          | Things to derive on the newly generated struct     | False      | List(Path)              | `derive(Debug, thiserror::Error)` |
-| preset          | Behaviours and/or defaults to apply                | False      | none/write/read         | `preset = "all"`                  |
-| attributes_with | Attributes to inherit at both struct & field level | False      | none/oai/deriveless/all | `attributes_with = "all"`         |
-| option          | A alternative to `Option<T>` to wrap fields with   | False      | Option/MaybeUndefined   | `option = MaybeUndefined`         |
-
-```rust
-#[derive(Clone, restructed::Models)]
-#[patch(UserUpdate, fields(display_name, bio, extra, password))]
-struct User {
-    id: i32, // Not in `UserUpdate`
-    display_name: String, // Option<String> in `UserUpdate`
-    bio: String, // Option<String> in `UserUpdate`
-    extra: Option<String>, // Option<Option<String>> in `UserUpdate` (If this isn't desired, see *option* arg and the *openapi* crate feature)
-    password: String, // Not in `UserProfile`
-}
-```
 
 <br/>
 
