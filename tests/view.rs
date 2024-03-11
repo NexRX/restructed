@@ -89,6 +89,18 @@ struct UserAttrNone{
     password: String,
 }
 
+//------------------ Structs -- defaults
+
+#[derive(Models)]
+#[model(fields(display_name, bio), attributes_with = "none")]
+#[view(UserProfileDefaults)]
+struct UserDefaults{
+    id: i32,
+    display_name: String,
+    bio: String,
+    password: String,
+}
+
 //------------------ Enums
 
 #[derive(Debug, Clone, Models)]

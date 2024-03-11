@@ -64,6 +64,19 @@ impl UserAlt {
     }
 }
 
+//------------------ Structs -- defaults
+
+#[derive(Models)]
+#[model(fields(display_name, bio), attributes_with = "none")]
+#[patch(UserProfileDefaults)]
+struct UserDefaults{
+    id: i32,
+    display_name: String,
+    bio: String,
+    password: String,
+}
+
+
 #[test]
 fn alt_omitted_only() {
     let user = UserAlt::new();

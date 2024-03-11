@@ -1,9 +1,70 @@
 use super::{
-    abort_unexpected_args, extract_idents, has_oai_attribute, take_ident_group, take_ident_ident, take_ident_literal, take_path_group
+    abort_unexpected_args, extract_idents, has_oai_attribute, take_ident_group, take_ident_ident,
+    take_ident_literal, take_path_group,
 };
 use proc_macro2::{Ident, TokenTree};
 use proc_macro_error::abort;
 use syn::{Attribute, Field};
+
+#[derive(Clone)]
+pub(crate) struct AttrArgsDefaults {
+    pub fields: Option<FieldsArg>,
+    pub derive: Option<Vec<syn::Path>>,
+    pub preset: Option<Preset>,
+    pub attributes_with: AttributesWith, // Has it's own None
+}
+
+impl AttrArgsDefaults {
+    /// Parses the attribute and returns the parsed arguments (0) and any remaining (1)
+    pub(crate) fn parse(attr: Vec<&Attribute>) -> Self {
+        if attr.is_empty() {
+            return Self {
+                fields: None,
+                derive: None,
+                preset: None,
+                attributes_with: AttributesWith::None,
+            };
+        } else if attr.len() > 1 {
+            abort!(
+                attr[1],
+                "Expected only one `model` attribute to derive defaults from."
+            )
+        }
+
+        let attr = attr.first().unwrap();
+
+        let mut tks: Vec<TokenTree> = attr
+            .meta
+            .require_list()
+            .unwrap()
+            .to_owned()
+            .tokens
+            .into_iter()
+            .collect::<Vec<_>>();
+        let args = &mut tks;
+
+        let fields = {
+            let fields = FieldsArg::parse(args, attr);
+            match fields.is_default() {
+                true => None,
+                false => Some(fields),
+            }
+        };
+        let derive = take_path_group("derive", args);
+        let preset = Preset::parse(args);
+        let attributes_with = AttributesWith::parse(args).unwrap_or_else(|| match preset {
+            Some(p) => p.attr_with(),
+            None => AttributesWith::None,
+        });
+
+        Self {
+            fields,
+            derive,
+            preset,
+            attributes_with,
+        }
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct AttrArgs {
@@ -24,7 +85,11 @@ impl AttrArgs {
     }
 
     /// Parses the attribute and returns the parsed arguments (0) and any remaining (1)
-    pub(crate) fn parse(attr: &Attribute, abort_unexpected: bool) -> (Self, Vec<TokenTree>) {
+    pub(crate) fn parse(
+        attr: &Attribute,
+        defaults: &AttrArgsDefaults,
+        abort_unexpected: bool,
+    ) -> (Self, Vec<TokenTree>) {
         let tks: Vec<TokenTree> = attr
             .meta
             .require_list()
@@ -44,19 +109,28 @@ impl AttrArgs {
             }
         };
 
-        if tks.len() < 3 {
-            abort!(attr, "Invalid syntax, expected at least one argument");
-        }
-
-        let mut args = tks[2..].to_vec();
+        let mut args = match tks.len() < 3 {
+            true => vec![],
+            false => tks[2..].to_vec(),
+        };
         let args_mr = &mut args;
 
         // Parse Expected Macro Args
-        let fields = FieldsArg::parse(args_mr, attr);
-        let derive = take_path_group("derive", args_mr);
-        let preset = Preset::parse(args_mr).unwrap_or_default();
-        let attributes_with = AttributesWith::parse(args_mr).unwrap_or_else(|| preset.attr_with());
-        
+        let fields = {
+            let fields = FieldsArg::parse(args_mr, attr);
+            match &defaults.fields {
+                Some(f) if fields.is_default() => f.clone(),
+                _ => fields,
+            }
+        };
+
+        let derive = take_path_group("derive", args_mr).or(defaults.derive.clone());
+        let preset = Preset::parse(args_mr).or(defaults.preset);
+        let attributes_with = AttributesWith::parse(args_mr).unwrap_or_else(|| match &preset {
+            Some(preset) => preset.attr_with(),
+            _ => defaults.attributes_with,
+        });
+
         if abort_unexpected {
             Self::abort_unexpected(&args, &[])
         }
@@ -66,8 +140,8 @@ impl AttrArgs {
                 name,
                 fields,
                 derive,
-                preset,
-                attributes_with
+                preset: preset.unwrap_or_default(),
+                attributes_with,
             },
             args,
         )
@@ -100,11 +174,19 @@ impl FieldsArg {
         match (field_arg, omit_args) {
             (Some(g), None) => Self::Fields(extract_idents(g)),
             (None, Some(g)) => Self::Omit(extract_idents(g)),
-            (None, None) => Self::Omit(vec![]),
+            (None, None) => Self::default(),
             (Some(_), Some(_)) => abort!(
                 attr_spanned,
                 "Cannot have both `fields` and `omit` arguments"
             ),
+        }
+    }
+
+    /// Similar to an is_empty function but only checks if omit is empty as thats the default case
+    pub(crate) fn is_default(&self) -> bool {
+        match self {
+            Self::Omit(fields) => fields.is_empty(),
+            _ => false,
         }
     }
 
@@ -113,6 +195,12 @@ impl FieldsArg {
             Self::Fields(fields) => fields.contains(field),
             Self::Omit(fields) => !fields.contains(field),
         }
+    }
+}
+
+impl Default for FieldsArg {
+    fn default() -> Self {
+        Self::Omit(vec![])
     }
 }
 
@@ -218,7 +306,6 @@ impl OptionType {
             ),
         })
     }
-    
 }
 
 #[derive(Debug, Clone, Copy, Default)]

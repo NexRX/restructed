@@ -1,4 +1,4 @@
-use crate::logic::{args::AttrArgs, *};
+use crate::logic::{args::{AttrArgs, AttrArgsDefaults}, *};
 use proc_macro2::{Ident, TokenStream};
 use proc_macro_error::abort;
 use quote::quote;
@@ -6,10 +6,11 @@ use syn::{self, Attribute, DataEnum, DataStruct, DeriveInput};
 
 pub fn impl_view_model(
     ast: &DeriveInput,
-    attr: &Attribute
+    attr: &Attribute,
+    defaults: &AttrArgsDefaults
 ) -> TokenStream {
     // Argument and Variable Initialization and Prep
-    let (args, _) = AttrArgs::parse(attr, true);
+    let (args, _) = AttrArgs::parse(attr, defaults, true);
     let AttrArgs {
         name,
         fields: _,
