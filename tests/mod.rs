@@ -1,3 +1,3 @@
-//! Entry point for integration tests.
-
+//! Entry point for integration/feature tests.
 mod feature_testing;
+
