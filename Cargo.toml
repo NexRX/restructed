@@ -1,14 +1,13 @@
 [package]
 name = "restructed"
-version = "0.1.4"
+version = "0.2.0"
 edition = "2021"
 readme = "readme.md"
 authors = ["Nex <nex@nexhub.co.uk>"]
 description = "Quickly derive subsets of your structs"
-keywords = ["structs", "views", "openapi", "generated", "derived"]
+keywords = ["view", "patch", "openapi", "derive", "restructed"]
 categories = ["derive-macro", "structs"]
 license = "Unlicense"
-license-file = "license.txt"
 
 [lib]
 proc-macro = true
