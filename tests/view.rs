@@ -92,7 +92,7 @@ struct UserAttrNone{
 //------------------ Structs -- defaults
 
 #[derive(Models)]
-#[model(fields(display_name, bio), attributes_with = "none")]
+#[model(defaults(fields(display_name, bio), attributes_with = "none"))]
 #[view(UserProfileDefaults)]
 struct UserDefaults{
     id: i32,

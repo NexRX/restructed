@@ -67,9 +67,31 @@ impl UserAlt {
 //------------------ Structs -- defaults
 
 #[derive(Models)]
-#[model(fields(display_name, bio), attributes_with = "none")]
+#[model(defaults(fields(display_name, bio), attributes_with = "none"))]
 #[patch(UserProfileDefaults)]
 struct UserDefaults{
+    id: i32,
+    display_name: String,
+    bio: String,
+    password: String,
+}
+
+//------------------ Structs -- base
+#[derive(Models)]
+#[model(base(fields(display_name, bio), attributes_with = "none"))]
+#[patch(UserProfileBase)]
+struct UserBase {
+    id: i32,
+    display_name: String,
+    bio: String,
+    password: String,
+}
+
+//------------------ Structs -- base & defaults mix
+#[derive(Models)]
+#[model(base(fields(bio, display_name), attributes_with = "none"), defaults(omit(display_name)))]
+#[patch(UserProfileMix)]
+struct UserMix {
     id: i32,
     display_name: String,
     bio: String,

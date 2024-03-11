@@ -7,42 +7,89 @@ use proc_macro_error::abort;
 use syn::{Attribute, Field};
 
 #[derive(Clone)]
-pub(crate) struct AttrArgsDefaults {
+pub(crate) struct ModelAttrArgs {
+    pub base: Option<BaseAttrArgs>,
+    pub defaults: Option<DefaultAttrArgs>,
+}
+
+impl ModelAttrArgs {
+    /// Conditional aborts on unexpected args to show that they arent valid
+    pub(crate) fn abort_unexpected(args: &[TokenTree]) {
+        const EXPECTED: &[&str; 2] = &["base", "defaults"];
+        abort_unexpected_args(EXPECTED.to_vec(), args);
+    }
+
+    pub(crate) fn parse(attr: Vec<Attribute>) -> Self {
+        if attr.is_empty() {
+            return Self {
+                base: None,
+                defaults: None,
+            };
+        } else if attr.len() > 1 {
+            abort!(
+                attr[1],
+                "Invalid attribute, expected only one `model` attribute but got `{}`",
+                attr.len()
+            )
+        }
+
+        let attr = attr.first().unwrap();
+
+        let mut args: Vec<TokenTree> = attr
+            .meta
+            .require_list()
+            .expect("This attribute must be in a list format")
+            .to_owned()
+            .tokens
+            .into_iter()
+            .collect::<Vec<_>>();
+        let args_mr = &mut args;
+
+        let base = take_ident_group("base", args_mr)
+            .map(|g| BaseAttrArgs::parse(&mut g.stream().into_iter().collect(), attr));
+
+        let defaults = take_ident_group("defaults", args_mr)
+            .map(|g| DefaultAttrArgs::parse(&mut g.stream().into_iter().collect(), attr));
+
+        Self::abort_unexpected(&args);
+
+        Self { base, defaults }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct BaseAttrArgs {
+    pub fields: Option<FieldsArg>,
+    pub derive: Option<Vec<syn::Path>>,
+}
+
+impl BaseAttrArgs {
+    /// Parses the attribute and returns the parsed arguments (0) and any remaining (1)
+    pub(crate) fn parse(args: &mut Vec<TokenTree>, attr: &Attribute) -> Self {
+        let fields = {
+            let fields = FieldsArg::parse(args, attr);
+            match fields.is_default() {
+                true => None,
+                false => Some(fields),
+            }
+        };
+        let derive = take_path_group("derive", args);
+
+        Self { fields, derive }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct DefaultAttrArgs {
     pub fields: Option<FieldsArg>,
     pub derive: Option<Vec<syn::Path>>,
     pub preset: Option<Preset>,
     pub attributes_with: AttributesWith, // Has it's own None
 }
 
-impl AttrArgsDefaults {
+impl DefaultAttrArgs {
     /// Parses the attribute and returns the parsed arguments (0) and any remaining (1)
-    pub(crate) fn parse(attr: Vec<&Attribute>) -> Self {
-        if attr.is_empty() {
-            return Self {
-                fields: None,
-                derive: None,
-                preset: None,
-                attributes_with: AttributesWith::None,
-            };
-        } else if attr.len() > 1 {
-            abort!(
-                attr[1],
-                "Expected only one `model` attribute to derive defaults from."
-            )
-        }
-
-        let attr = attr.first().unwrap();
-
-        let mut tks: Vec<TokenTree> = attr
-            .meta
-            .require_list()
-            .unwrap()
-            .to_owned()
-            .tokens
-            .into_iter()
-            .collect::<Vec<_>>();
-        let args = &mut tks;
-
+    pub(crate) fn parse(args: &mut Vec<TokenTree>, attr: &Attribute) -> Self {
         let fields = {
             let fields = FieldsArg::parse(args, attr);
             match fields.is_default() {
@@ -84,16 +131,16 @@ impl AttrArgs {
         abort_unexpected_args(expect, args)
     }
 
-    /// Parses the attribute and returns the parsed arguments (0) and any remaining (1)
+    /// Parses the attribute and returns the parsed arguments as `Self` (0) and any arguments remaining unparsed (1)
     pub(crate) fn parse(
         attr: &Attribute,
-        defaults: &AttrArgsDefaults,
+        model_args: ModelAttrArgs,
         abort_unexpected: bool,
     ) -> (Self, Vec<TokenTree>) {
         let tks: Vec<TokenTree> = attr
             .meta
             .require_list()
-            .unwrap()
+            .expect("This attribute must be in a list format")
             .to_owned()
             .tokens
             .into_iter()
@@ -113,23 +160,13 @@ impl AttrArgs {
             true => vec![],
             false => tks[2..].to_vec(),
         };
-        let args_mr = &mut args;
 
-        // Parse Expected Macro Args
-        let fields = {
-            let fields = FieldsArg::parse(args_mr, attr);
-            match &defaults.fields {
-                Some(f) if fields.is_default() => f.clone(),
-                _ => fields,
-            }
-        };
-
-        let derive = take_path_group("derive", args_mr).or(defaults.derive.clone());
-        let preset = Preset::parse(args_mr).or(defaults.preset);
-        let attributes_with = AttributesWith::parse(args_mr).unwrap_or_else(|| match &preset {
-            Some(preset) => preset.attr_with(),
-            _ => defaults.attributes_with,
-        });
+        let fields = FieldsArg::parse_with_args(&mut args, &model_args, attr);
+        let derive = parse_derives_wtih_args(&mut args, &model_args);
+        let preset = Preset::parse_with_args(&mut args, &model_args);
+        let attributes_with =
+            AttributesWith::parse_with_args(&mut args, &model_args, preset.as_ref())
+                .unwrap_or_default();
 
         if abort_unexpected {
             Self::abort_unexpected(&args, &[])
@@ -182,6 +219,38 @@ impl FieldsArg {
         }
     }
 
+    pub(crate) fn parse_with_args(
+        args: &mut Vec<TokenTree>,
+        model_args: &ModelAttrArgs,
+        attr: &Attribute, // Just for its span and error highlighting purposes
+    ) -> Self {
+        use FieldsArg::*;
+        let fields = FieldsArg::parse(args, attr);
+
+        let default_fields = model_args.defaults.as_ref().and_then(|v| v.fields.clone());
+        let fields = match &default_fields {
+            Some(f) if fields.is_default() => f.clone(),
+            _ => fields,
+        };
+
+        let base_fields = model_args.base.as_ref().and_then(|v| v.fields.clone());
+        if let Some(base) = base_fields {
+            let final_fields: Vec<_> = match (fields, base) {
+                (Fields(f), Fields(b)) => f.into_iter().filter(|v| b.contains(v)).collect(),
+                (Fields(f), Omit(b)) => f.into_iter().filter(|v| !b.contains(v)).collect(),
+                (Omit(f), Fields(b)) => b.into_iter().filter(|v| !f.contains(v)).collect(),
+                (Omit(f), Omit(mut b)) => {
+                    let not_in_base = f.into_iter().filter(|v| !b.contains(v)).collect::<Vec<_>>();
+                    b.extend(not_in_base);
+                    b
+                }
+            };
+            Fields(final_fields)
+        } else {
+            fields
+        }
+    }
+
     /// Similar to an is_empty function but only checks if omit is empty as thats the default case
     pub(crate) fn is_default(&self) -> bool {
         match self {
@@ -226,14 +295,25 @@ impl AttributesWith {
             "all" => Self::All,
             #[cfg(feature = "openapi")]
             v => abort!(
-                    ident,
-                    "Invalid value, expected `none`, `oai` (from poem_openapi crate), `deriveless`, or `all` but got `{}`", v
-                ),
+                ident,
+                "Invalid value, expected `none`, `oai` (from poem_openapi crate), `deriveless`, or `all` but got `{}`", v
+            ),
             #[cfg(not(feature = "openapi"))]
             v => abort!(
-                    ident,
-                    "Invalid value, expected `none`, `deriveless`, or `all` but got `{}`", v
-                ),
+                ident,
+                "Invalid value, expected `none`, `deriveless`, or `all` but got `{}`", v
+            ),
+        })
+    }
+
+    pub(crate) fn parse_with_args(
+        args: &mut Vec<TokenTree>,
+        model_args: &ModelAttrArgs,
+        preset: Option<&Preset>,
+    ) -> Option<Self> {
+        AttributesWith::parse(args).or_else(|| match preset {
+            Some(preset) => Some(preset.attr_with()),
+            None => model_args.defaults.as_ref().map(|f| f.attributes_with),
         })
     }
 
@@ -331,15 +411,21 @@ impl Preset {
             "write" => Self::Write,
             #[cfg(feature = "openapi")]
             v => abort!(
-                    ident,
-                    "Invalid value, expected `none` or `read`/`write` (with `openapi` feature) but got `{}`", v
-                ),
+                ident,
+                "Invalid value, expected `none` or `read`/`write` (with `openapi` feature) but got `{}`", v
+            ),
             #[cfg(not(feature = "openapi"))]
             v => abort!(
-                    ident,
-                    "Invalid value, expected `none` but got `{}`", v
-                ),
+                ident,
+                "Invalid value, expected `none` but got `{}`", v
+            ),
         })
+    }
+    pub(crate) fn parse_with_args(
+        args: &mut Vec<TokenTree>,
+        model_args: &ModelAttrArgs,
+    ) -> Option<Self> {
+        Preset::parse(args).or(model_args.defaults.as_ref().and_then(|f| f.preset))
     }
 
     pub(crate) fn predicate(&self, field: &Field) -> bool {
@@ -366,5 +452,25 @@ impl Preset {
             #[cfg(feature = "openapi")]
             Self::Read | Self::Write => AttributesWith::Oai,
         }
+    }
+}
+
+/// Parses the `derive` attribute and returns the parsed arguments as a Vec of `syn::Path` if the argument was given
+fn parse_derives_wtih_args(
+    args: &mut Vec<TokenTree>,
+    model_args: &ModelAttrArgs,
+) -> Option<Vec<syn::Path>> {
+    let base_derives = model_args.base.as_ref().and_then(|v| v.derive.clone());
+    let default_derives = model_args.defaults.as_ref().and_then(|v| v.derive.clone());
+
+    let derives = take_path_group("derive", args).or(default_derives.clone());
+    match (derives, base_derives) {
+        (Some(d), Some(mut b)) => {
+            b.extend(d);
+            Some(b)
+        }
+        (Some(g), None) => Some(g),
+        (None, Some(b)) => Some(b),
+        (None, None) => None,
     }
 }

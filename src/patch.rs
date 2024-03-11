@@ -1,5 +1,5 @@
 use crate::logic::{
-    args::{AttrArgs, AttrArgsDefaults, OptionType},
+    args::{AttrArgs, ModelAttrArgs, OptionType},
     *,
 };
 use proc_macro2::{Ident, TokenStream};
@@ -10,7 +10,7 @@ use syn::{Attribute, DeriveInput, Type};
 pub fn impl_patch_model(
     ast: &DeriveInput,
     attr: &Attribute,
-    defaults: &AttrArgsDefaults,
+    defaults: ModelAttrArgs,
 ) -> TokenStream {
     // Argument and Variable Initialization and Prep
     let (args, mut remainder) = AttrArgs::parse(attr, defaults, false);

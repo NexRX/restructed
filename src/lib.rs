@@ -6,7 +6,7 @@ mod patch;
 mod view;
 
 use crate::logic::is_attribute;
-use logic::args::AttrArgsDefaults;
+use logic::args::ModelAttrArgs;
 use proc_macro::TokenStream;
 use proc_macro_error::proc_macro_error;
 
@@ -18,21 +18,22 @@ pub fn models(input: TokenStream) -> TokenStream {
     let model_attr = ast.attrs
         .iter()
         .filter(|v| is_attribute(v, "model"))
+        .cloned()
         .collect::<Vec<_>>();
-    let defaults = AttrArgsDefaults::parse(model_attr);
+    let model_args = ModelAttrArgs::parse(model_attr);
 
     let views: Vec<proc_macro2::TokenStream> = ast
         .attrs
         .iter()
         .filter(|v| is_attribute(v, "view"))
-        .map(|a| view::impl_view_model(&ast, a, &defaults))
+        .map(|a| view::impl_view_model(&ast, a, model_args.clone()))
         .collect();
 
     let patches: Vec<proc_macro2::TokenStream> = ast
         .attrs
         .iter()
         .filter(|v| is_attribute(v, "patch"))
-        .map(|a| patch::impl_patch_model(&ast, a, &defaults))
+        .map(|a| patch::impl_patch_model(&ast, a, model_args.clone()))
         .collect();
 
     let gen = quote::quote!(
