@@ -200,13 +200,6 @@ impl FieldsArg {
         let field_arg = take_ident_group("fields", args);
         let omit_args = take_ident_group("omit", args);
 
-        if field_arg.is_some() && omit_args.is_some() {
-            abort!(
-                attr_spanned,
-                "Cannot have both `fields` and `omit` arguments"
-            )
-        }
-
         // Parse the fields argument into a TokenStream, skip checking for commas coz lazy
         match (field_arg, omit_args) {
             (Some(g), None) => Self::Fields(extract_idents(g)),
@@ -236,7 +229,11 @@ impl FieldsArg {
         let base_fields = model_args.base.as_ref().and_then(|v| v.fields.clone());
         if let Some(base) = base_fields {
             let final_fields: Vec<_> = match (fields, base) {
-                (Fields(f), Fields(b)) => f.into_iter().filter(|v| b.contains(v)).collect(),
+                (Fields(f), Fields(ref b)) => f
+                    .into_iter()
+                    .filter(|v| !b.contains(v))
+                    .chain(b.clone().into_iter())
+                    .collect(),
                 (Fields(f), Omit(b)) => f.into_iter().filter(|v| !b.contains(v)).collect(),
                 (Omit(f), Fields(b)) => b.into_iter().filter(|v| !f.contains(v)).collect(),
                 (Omit(f), Omit(mut b)) => {

@@ -24,11 +24,12 @@ pub fn impl_view_model(
     let original_name = &ast.ident;
     let is_struct = matches!(&ast.data, syn::Data::Struct(_));
     let mut field_mapping: Vec<TokenStream> = vec![]; // Will contain each fields `From` trait impl
+    let mut field_mapping_reverse: Vec<TokenStream> = vec![];
 
     // Generate Implementation
     let field_tokens: Vec<_> = match &ast.data {
-        syn::Data::Struct(data) => impl_for_struct(data, &mut field_mapping, &args),
-        syn::Data::Enum(data) => impl_for_enum(data, &mut field_mapping, &args, original_name),
+        syn::Data::Struct(data) => impl_for_struct(data, &mut field_mapping, &mut field_mapping_reverse, &args),
+        syn::Data::Enum(data) => impl_for_enum(data, &mut field_mapping, &mut field_mapping_reverse, &args, original_name),
         syn::Data::Union(_) => abort!(attr, "Patch Model can only be derived for `struct` & `enum`, NOT `union`"),
     };
 
@@ -41,7 +42,7 @@ pub fn impl_view_model(
     let attributes = attributes_with.gen_top_attributes(ast);
     let derives = gen_derive(derive.as_ref());
     
-    let impl_from = impl_from_trait(original_name, &name, field_mapping, is_struct);
+    let impl_from = impl_from_trait(original_name, &name, field_mapping, field_mapping_reverse, is_struct);
 
     let doc_string = format!("This is a restructured (View) model of ['{original_name}']. Refer to the original model for more structual documentation.");
     quote! {
@@ -59,7 +60,8 @@ pub fn impl_view_model(
 fn impl_from_trait(
     original_name: &Ident,
     name: &Ident,
-    field_from_mapping: Vec<TokenStream>,
+    field_mapping: Vec<TokenStream>,
+    field_mapping_reverse: Vec<TokenStream>,
     is_struct: bool,
 ) -> proc_macro2::TokenStream {
     if is_struct {
@@ -67,7 +69,7 @@ fn impl_from_trait(
             impl ::core::convert::From<#original_name> for #name  {
                 fn from(value: #original_name) -> Self {
                     Self {
-                        #(#field_from_mapping),*
+                        #(#field_mapping),*
                     }
                 }
             }
@@ -77,8 +79,19 @@ fn impl_from_trait(
             impl ::core::convert::From<#name> for #original_name  {
                 fn from(value: #name) -> Self {
                     match value {
-                        #(#field_from_mapping),*
+                        #(#field_mapping),*
                     }
+                }
+            }
+
+            impl ::core::convert::TryFrom<#original_name> for #name {
+                type Error = ();
+
+                fn try_from(value: #original_name) -> Result<Self, Self::Error> {
+                    Ok(match value {
+                        #(#field_mapping_reverse, )*
+                        _ => return Err(())
+                    })
                 }
             }
         }
@@ -86,7 +99,7 @@ fn impl_from_trait(
 }
 
 
-fn impl_for_struct(data: &DataStruct, field_mapping: &mut Vec<TokenStream>, args: &AttrArgs) -> Vec<TokenStream> {
+fn impl_for_struct(data: &DataStruct, field_mapping: &mut Vec<TokenStream>, field_mapping_reverse: &mut Vec<TokenStream>, args: &AttrArgs) -> Vec<TokenStream> {
     let AttrArgs {
         name: _,
         fields,
@@ -110,7 +123,10 @@ fn impl_for_struct(data: &DataStruct, field_mapping: &mut Vec<TokenStream>, args
 
                 let field_attr = attributes_with.gen_field_attributes(field.attrs.clone());
 
-                field_mapping.push(quote!(#field_name: value.#field_name));
+                let mapping = quote!(#field_name: value.#field_name);
+                field_mapping.push(mapping.clone());
+                field_mapping_reverse.push(mapping);
+                
                 quote! {
                     #docs
                     #(#field_attr)*
@@ -120,7 +136,7 @@ fn impl_for_struct(data: &DataStruct, field_mapping: &mut Vec<TokenStream>, args
             .collect()
 }
 
-fn impl_for_enum(data: &DataEnum, field_mapping: &mut Vec<TokenStream>, args: &AttrArgs, original_name: &Ident) -> Vec<TokenStream> {
+fn impl_for_enum(data: &DataEnum, field_mapping: &mut Vec<TokenStream>, field_mapping_reverse: &mut Vec<TokenStream>, args: &AttrArgs, original_name: &Ident) -> Vec<TokenStream> {
     let AttrArgs {
         name,
         fields,
@@ -144,6 +160,9 @@ fn impl_for_enum(data: &DataEnum, field_mapping: &mut Vec<TokenStream>, args: &A
                 field_mapping.push(quote!{
                     #name::#field_name => #original_name::#field_name
                 });
+                field_mapping_reverse.push(quote!{
+                    #original_name::#field_name => #name::#field_name
+                });
             },
             syn::Fields::Unnamed(_) => {
                 let variant_args: Vec<_> = field
@@ -161,6 +180,9 @@ fn impl_for_enum(data: &DataEnum, field_mapping: &mut Vec<TokenStream>, args: &A
                 field_mapping.push(quote!{
                     #name::#field_name(#(#variant_args),*) => #original_name::#field_name(#(#variant_args),*)
                 });
+                field_mapping_reverse.push(quote!{
+                    #original_name::#field_name(#(#variant_args),*) => #name::#field_name(#(#variant_args),*)
+                });
             }
             syn::Fields::Named(n) => {
                 let variant_args: Vec<_> = n
@@ -175,6 +197,9 @@ fn impl_for_enum(data: &DataEnum, field_mapping: &mut Vec<TokenStream>, args: &A
                     .collect();
                 field_mapping.push(quote!{
                     #name::#field_name{#(#variant_args),*} => #original_name::#field_name{#(#variant_args),*}
+                });
+                field_mapping_reverse.push(quote!{
+                    #original_name::#field_name(#(#variant_args),*) => #name::#field_name(#(#variant_args),*)
                 });
             },
         };
