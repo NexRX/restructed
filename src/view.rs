@@ -199,7 +199,7 @@ fn impl_for_enum(data: &DataEnum, field_mapping: &mut Vec<TokenStream>, field_ma
                     #name::#field_name{#(#variant_args),*} => #original_name::#field_name{#(#variant_args),*}
                 });
                 field_mapping_reverse.push(quote!{
-                    #original_name::#field_name(#(#variant_args),*) => #name::#field_name(#(#variant_args),*)
+                    #original_name::#field_name{#(#variant_args),*} => #name::#field_name{#(#variant_args),*}
                 });
             },
         };

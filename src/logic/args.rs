@@ -232,7 +232,7 @@ impl FieldsArg {
                 (Fields(f), Fields(ref b)) => f
                     .into_iter()
                     .filter(|v| !b.contains(v))
-                    .chain(b.clone().into_iter())
+                    .chain(b.clone())
                     .collect(),
                 (Fields(f), Omit(b)) => f.into_iter().filter(|v| !b.contains(v)).collect(),
                 (Omit(f), Fields(b)) => b.into_iter().filter(|v| !f.contains(v)).collect(),
