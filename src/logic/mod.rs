@@ -1,10 +1,14 @@
-use proc_macro2::{Group, Ident, Literal, TokenTree};
+use args::ModelAttrArgs;
+use proc_macro2::{Group, Ident, Literal, TokenStream, TokenTree};
 use proc_macro_error::abort;
 use quote::quote;
 use syn::{parse2, Attribute};
 
 #[cfg(test)]
 mod tests;
+#[cfg(feature = "openapi")]
+mod openapi;
+pub(crate) use openapi::*;
 
 pub(crate) mod args;
 
@@ -249,20 +253,15 @@ pub(crate) fn gen_derive(
     )
 }
 
-#[cfg(feature = "openapi")]
-pub(crate) fn has_oai_attribute(attrs: &[Attribute], containing: Option<&str>) -> bool {
-    attrs.iter()
-        .filter(|a| a.path().is_ident("oai"))
-        .filter(|a| 
-            match containing {
-                Some(name) =>
-                    a.meta.require_list()
-                    .expect("oai attribute usually has a list")
-                    .tokens
-                    .to_string()
-                    .contains(name),
-                None => true
-            }
-        )
-        .count() > 0
+/// Generates extra nice to have implementations for the generated models
+ // Dev Note: Okay for now in generic logic module, but future extras may need to be handled in patch/view modules.
+ pub fn impl_extras(
+    original_name: &Ident,
+    name: &Ident,
+    model_args: &ModelAttrArgs,
+) -> Vec<TokenStream> {
+    vec![
+        #[cfg(feature = "openapi")]
+        impl_oai_example(name, original_name, model_args)
+    ]
 }

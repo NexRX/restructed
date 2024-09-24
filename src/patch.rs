@@ -10,10 +10,10 @@ use syn::{Attribute, DeriveInput, Type};
 pub fn impl_patch_model(
     ast: &DeriveInput,
     attr: &Attribute,
-    defaults: ModelAttrArgs,
+    model_args: &ModelAttrArgs,
 ) -> TokenStream {
     // Argument and Variable Initialization and Prep
-    let (args, mut remainder) = AttrArgs::parse(attr, defaults, false);
+    let (args, mut remainder) = AttrArgs::parse(attr, model_args, false);
     let AttrArgs {
         name,
         fields: _,
@@ -61,6 +61,7 @@ pub fn impl_patch_model(
     let derives = gen_derive(derive.as_ref());
     let impl_from_derived = impl_from_derived(&fields_and_is_option, option);
     let impl_merge = impl_merge(&fields_and_is_option, option);
+    let impl_extras = impl_extras(original_name, &name, model_args);
 
     // Generate the implementation of the PatchModel trait
     quote! {
@@ -100,6 +101,8 @@ pub fn impl_patch_model(
                 #name::from_derived(value)
             }
         }
+
+        #(#impl_extras)*
     }
 }
 

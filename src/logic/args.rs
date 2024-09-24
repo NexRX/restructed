@@ -6,10 +6,11 @@ use proc_macro2::{Ident, TokenTree};
 use proc_macro_error::abort;
 use syn::{Attribute, Field};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(crate) struct ModelAttrArgs {
     pub base: Option<BaseAttrArgs>,
     pub defaults: Option<DefaultAttrArgs>,
+    pub extras: ExtraConditions,
 }
 
 impl ModelAttrArgs {
@@ -19,21 +20,18 @@ impl ModelAttrArgs {
         abort_unexpected_args(EXPECTED.to_vec(), args);
     }
 
-    pub(crate) fn parse(attr: Vec<Attribute>) -> Self {
-        if attr.is_empty() {
-            return Self {
-                base: None,
-                defaults: None,
-            };
-        } else if attr.len() > 1 {
+    pub(crate) fn parse(attrs: Vec<Attribute>, extras: ExtraConditions) -> Self {
+        if attrs.is_empty() {
+            return Self::default();
+        } else if attrs.len() > 1 {
             abort!(
-                attr[1],
+                attrs[1],
                 "Invalid attribute, expected only one `model` attribute but got `{}`",
-                attr.len()
+                attrs.len()
             )
         }
 
-        let attr = attr.first().unwrap();
+        let attr = attrs.first().unwrap();
 
         let mut args: Vec<TokenTree> = attr
             .meta
@@ -53,7 +51,11 @@ impl ModelAttrArgs {
 
         Self::abort_unexpected(&args);
 
-        Self { base, defaults }
+        Self {
+            base,
+            defaults,
+            extras,
+        }
     }
 }
 
@@ -115,10 +117,15 @@ impl DefaultAttrArgs {
 
 #[derive(Clone)]
 pub(crate) struct AttrArgs {
+    /// The name of the newly derived struct
     pub name: Ident,
+    /// Fields the be generated via omitting or listing
     pub fields: FieldsArg,
+    /// Things to derive on the derived struct
     pub derive: Option<Vec<syn::Path>>,
+    /// Presets to apply to the derived struct
     pub preset: Preset,
+    /// Attributes to carry over onto the derived struct
     pub attributes_with: AttributesWith,
 }
 
@@ -134,7 +141,7 @@ impl AttrArgs {
     /// Parses the attribute and returns the parsed arguments as `Self` (0) and any arguments remaining unparsed (1)
     pub(crate) fn parse(
         attr: &Attribute,
-        model_args: ModelAttrArgs,
+        model_args: &ModelAttrArgs,
         abort_unexpected: bool,
     ) -> (Self, Vec<TokenTree>) {
         let tks: Vec<TokenTree> = attr
@@ -161,11 +168,11 @@ impl AttrArgs {
             false => tks[2..].to_vec(),
         };
 
-        let fields = FieldsArg::parse_with_args(&mut args, &model_args, attr);
-        let derive = parse_derives_wtih_args(&mut args, &model_args);
-        let preset = Preset::parse_with_args(&mut args, &model_args);
+        let fields = FieldsArg::parse_with_args(&mut args, model_args, attr);
+        let derive = parse_derives_wtih_args(&mut args, model_args);
+        let preset = Preset::parse_with_args(&mut args, model_args);
         let attributes_with =
-            AttributesWith::parse_with_args(&mut args, &model_args, preset.as_ref())
+            AttributesWith::parse_with_args(&mut args, model_args, preset.as_ref())
                 .unwrap_or_default();
 
         if abort_unexpected {
@@ -469,5 +476,20 @@ fn parse_derives_wtih_args(
         (Some(g), None) => Some(g),
         (None, Some(b)) => Some(b),
         (None, None) => None,
+    }
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct ExtraConditions {
+    #[cfg(feature = "openapi")]
+    /// When true, the deriving struct has an `#[oai(example)]` attribute and the derived struct should handle this.
+    pub has_oai_example: bool,
+}
+
+impl ExtraConditions {
+    pub(crate) fn parse(attr: &[Attribute]) -> Self {
+        Self {
+            has_oai_example: has_oai_attribute(attr, Some("example")),
+        }
     }
 }

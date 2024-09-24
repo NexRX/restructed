@@ -104,3 +104,28 @@ fn mapping_enum() {
     let is_match = matches!(err.clone(), ApiError::NotFound(v) if v.0 == "No User");
     assert!(is_match, "Expected NotFound, got {:?}", err);
 }
+
+
+// ---------- Issues
+
+// https://github.com/NexRX/restructed/issues/3 - #[oai(example)] causes compilation errors with generated structs
+#[derive(poem_openapi::Object, Models)]
+#[oai(example, skip_serializing_if_is_none, rename_all = "camelCase")] // <-- this here
+#[model(base(derive(poem_openapi::Object, Debug)), defaults(preset = "read"))]
+#[patch(Issue3UserUpdate, preset = "write")]
+pub struct Issue3User {
+    #[oai(read_only)]
+    pub id: u32,
+
+    #[oai(validator(min_length = 3, max_length = 16, pattern = r"^[a-zA-Z0-9_]*$"))] // oai attributes carry over with `preset = write/write` or attributes_with="oai"
+    pub username: String,
+
+    #[oai(validator(min_length = 5, max_length = 1024), write_only)]
+    pub password: String,
+}
+
+impl poem_openapi::types::Example for Issue3User {
+    fn example() -> Self {
+        unimplemented!()
+    }
+}

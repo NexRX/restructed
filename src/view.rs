@@ -9,10 +9,10 @@ use self::args::ModelAttrArgs;
 pub fn impl_view_model(
     ast: &DeriveInput,
     attr: &Attribute,
-    defaults: ModelAttrArgs
+    model_args: &ModelAttrArgs
 ) -> TokenStream {
     // Argument and Variable Initialization and Prep
-    let (args, _) = AttrArgs::parse(attr, defaults, true);
+    let (args, _) = AttrArgs::parse(attr, model_args, true);
     let AttrArgs {
         name,
         fields: _,
@@ -43,6 +43,7 @@ pub fn impl_view_model(
     let derives = gen_derive(derive.as_ref());
     
     let impl_from = impl_from_trait(original_name, &name, field_mapping, field_mapping_reverse, is_struct);
+    let impl_extras = impl_extras(original_name, &name, model_args);
 
     let doc_string = format!("This is a restructured (View) model of ['{original_name}']. Refer to the original model for more structual documentation.");
     quote! {
@@ -54,16 +55,18 @@ pub fn impl_view_model(
         }
 
         #impl_from
+        #(#impl_extras)*
     }
 }
 
+/// Handles automatic trait implementation of `From<OriginalModel>` and `TryFrom<OriginalModel>` for the generated model
 fn impl_from_trait(
     original_name: &Ident,
     name: &Ident,
     field_mapping: Vec<TokenStream>,
     field_mapping_reverse: Vec<TokenStream>,
     is_struct: bool,
-) -> proc_macro2::TokenStream {
+) -> TokenStream {
     if is_struct {
         quote! {
             impl ::core::convert::From<#original_name> for #name  {
