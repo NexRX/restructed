@@ -6,7 +6,7 @@ readme = "readme.md"
 authors = ["Nex <nex@nexhub.co.uk>"]
 description = "Quickly derive subsets of your structs"
 keywords = ["view", "patch", "openapi", "derive", "restructed"]
-categories = ["derive-macro", "structs"]
+categories = ["rust-patterns", "data-structures"]
 license = "Unlicense"
 
 [lib]
