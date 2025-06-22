@@ -26,13 +26,12 @@ proc-macro-error = "1.0.4"
 
 
 [dev-dependencies]
+validator = { version = "0.20.0", features = ["derive"] }
 # # Supported Crates
-poem-openapi = { version = "4.0", features = [
+poem-openapi = { version = "5.1.15", features = [
     "uuid",
     "chrono",
-] }
-# typed-builder = { version = "0.18.0" }
-# welds = { version = "0.3", default-features = false}
+]}
 
 [package.metadata.docs.rs]
 all-features = true

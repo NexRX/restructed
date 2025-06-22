@@ -489,6 +489,7 @@ pub(crate) struct ExtraConditions {
 impl ExtraConditions {
     pub(crate) fn parse(attr: &[Attribute]) -> Self {
         Self {
+            #[cfg(feature = "openapi")]
             has_oai_example: has_oai_attribute(attr, Some("example")),
         }
     }
