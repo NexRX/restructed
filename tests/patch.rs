@@ -3,6 +3,7 @@ extern crate restructed;
 
 use poem_openapi::types::MaybeUndefined;
 use restructed::Models;
+use serde_json::{json, to_value};
 
 #[derive(Models, Clone)]
 #[patch(UserUpdatables, omit(id))]
@@ -114,4 +115,36 @@ fn alt_omitted_only() {
     assert_ne!(user.display_name, updated_user.display_name);
     assert_ne!(user.bio, updated_user.bio);
     assert_ne!(user.password, updated_user.password);
+}
+
+
+// ------------------------------
+
+#[derive(restructed::Models)]
+#[patch(UserPatch, attributes_with = "all". skip_serializing_double_option = true)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone)]
+struct UserDontSerialName {
+    name: Option<String>,
+    email: String,
+}
+
+#[test]
+fn name_patch_serialization() {
+    let name_some = UserPatch {
+        name: Some(Some("c00l dud3".to_string())),
+        email: Some("www.com".to_string()),
+    };
+
+    let name_none = UserPatch {
+        name: None,
+        email: Some("www.com".to_string()),
+    };
+
+    // When name is Some(Some(_)), it should serialize
+    let value_some = to_value(&name_some).unwrap();
+    assert_eq!(value_some.get("name"), Some(&json!("c00l dud3")));
+
+    // When name is None, it should not serialize the field
+    let value_none = to_value(&name_none).unwrap();
+    assert!(value_none.get("name").is_none());
 }

@@ -102,15 +102,16 @@ struct User {
 ## `#[patch]`
 A model that creates subsets of your data except each field's type is wrapped in a `Option<t>` or a alternative type of Option implementation if specified. It is useful for creating RESTful API patch method types or database table patches where you only want to update fields if they were explicitly given (even to delete).
 
-| Argument Name   | description                                        | Required?  | Type/Enum               | Example                           |
-|-----------------|----------------------------------------------------|------------|-------------------------|-----------------------------------|
-| name            | Name of the struct the generate                    | True+First | Identifier              | `MyStruct`                        |
-| **fields** or   | Field names in the original structure to include   | False      | List(Ident)             | `fields(field1, field2, ...)`     |  
-| **omit**        | Field names in the original structure to exclude   | False      | List(Ident)             | `omit(field1, field2, ...)`       |
-| derive          | Things to derive on the newly generated struct     | False      | List(Path)              | `derive(Debug, thiserror::Error)` |
-| preset          | Behaviours and/or defaults to apply                | False      | none/write/read         | `preset = "all"`                  |
-| attributes_with | Attributes to inherit at both struct and field level | False      | none/oai/deriveless/all | `attributes_with = "all"`         |
-| option          | A alternative to `Option<T>` to wrap fields with   | False      | Option/MaybeUndefined   | `option = MaybeUndefined`         |
+| Argument Name                    | description                                          | Required?  | Type/Enum               | Example                                   |
+|----------------------------------|------------------------------------------------------|------------|-------------------------|-------------------------------------------|
+| name                             | Name of the struct the generate                      | True+First | Identifier              | `MyStruct`                                |
+| **fields** or                    | Field names in the original structure to include     | False      | List(Ident)             | `fields(field1, field2, ...)`             |  
+| **omit**                         | Field names in the original structure to exclude     | False      | List(Ident)             | `omit(field1, field2, ...)`               |
+| derive                           | Things to derive on the newly generated struct       | False      | List(Path)              | `derive(Debug, thiserror::Error)`         |
+| preset                           | Behaviours and/or defaults to apply                  | False      | none/write/read         | `preset = "all"`                          |
+| attributes_with                  | Attributes to inherit at both struct and field level | False      | none/oai/deriveless/all | `attributes_with = "all"`                 |
+| option                           | A alternative to `Option<T>` to wrap fields with     | False      | Option/MaybeUndefined   | `option = MaybeUndefined`                 |
+| skip_serializing_double_option   | For `Option<Option<T>>`, skips serializing if `None` | False      | true / false (default)  | `skip_serializing_double_option = true` |
 
 ```rust
 #[derive(Clone, restructed::Models)]

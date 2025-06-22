@@ -14,7 +14,7 @@ pub(crate) mod args;
 
 /// Check the first segment of an attribute to see if it matches the given name
 pub(crate) fn is_attribute(attr: &Attribute, name: &str) -> bool {
-    get_attribute_name(attr).map_or(false, |v| v == name)
+    get_attribute_name(attr).is_some_and(|v| v == name)
 }
 
 /// Gets the first segment of the attribute which should typically the name of the attribute
@@ -210,8 +210,8 @@ pub(crate) fn extract_idents(group: Group) -> Vec<Ident> {
 
 
 pub(crate) fn is_doc(v: &&Attribute) -> bool {
-    v.meta.require_name_value().map_or(false, |v| {
-        v.path.segments.first().map_or(false, |v| v.ident == "doc")
+    v.meta.require_name_value().is_ok_and(|v| {
+        v.path.segments.first().is_some_and(|v| v.ident == "doc")
     })
 }
 

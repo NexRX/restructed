@@ -22,6 +22,8 @@ pub fn impl_patch_model(
         attributes_with,
     } = args.clone();
 
+    let skip_serializing_double_option =
+        take_ident_bool("skip_serializing_double_option", &mut remainder).unwrap_or_default();
     let option = OptionType::parse(&mut remainder).unwrap_or_else(|| preset.option());
 
     AttrArgs::abort_unexpected(&remainder, &["option"]);
@@ -51,7 +53,12 @@ pub fn impl_patch_model(
 
                 fields_and_is_option.push((field_name, option_ty.is_some()));
                 fields.push(impl_struct_fields(
-                    field_name, field_ty, option_ty, &docs, option,
+                    field_name,
+                    field_ty,
+                    option_ty,
+                    &docs,
+                    option,
+                    skip_serializing_double_option,
                 ));
             }),
         _ => abort!(attr, "Patch Models can only be derived for structs"),
@@ -187,6 +194,7 @@ fn impl_struct_fields(
     #[allow(unused_variables)] option_ty: Option<&Type>,
     docs: &TokenStream,
     option: OptionType,
+    skip_serializing_double_option: bool,
 ) -> TokenStream {
     match option {
         OptionType::MaybeUndefined => match option_ty {
@@ -204,8 +212,16 @@ fn impl_struct_fields(
             }
         },
         OptionType::Option => {
+            let skip_serializing_if = match skip_serializing_double_option && option_ty.is_some()
+            {
+                true => quote! {
+                   #[serde(skip_serializing_if = "::core::option::Option::is_none")]
+                },
+                false => quote! {},
+            };
             quote! {
                 #docs
+                #skip_serializing_if
                 pub #field_name: core::option::Option<#field_ty>
             }
         }
