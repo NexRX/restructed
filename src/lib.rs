@@ -7,7 +7,7 @@ mod view;
 use crate::logic::is_attribute;
 use logic::args::{ExtraConditions, ModelAttrArgs};
 use proc_macro::TokenStream;
-use proc_macro_error::proc_macro_error;
+use proc_macro_error3::proc_macro_error;
 
 #[proc_macro_error]
 #[proc_macro_derive(Models, attributes(model, view, patch))]

@@ -1,6 +1,6 @@
 use args::ModelAttrArgs;
 use proc_macro2::{Group, Ident, Literal, TokenStream, TokenTree};
-use proc_macro_error::abort;
+use proc_macro_error3::abort;
 use quote::quote;
 use syn::{parse2, Attribute};
 

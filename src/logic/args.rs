@@ -3,7 +3,7 @@ use super::{
     take_ident_literal, take_path_group,
 };
 use proc_macro2::{Ident, TokenTree};
-use proc_macro_error::abort;
+use proc_macro_error3::abort;
 use syn::{Attribute, Field};
 
 #[derive(Clone, Default)]
