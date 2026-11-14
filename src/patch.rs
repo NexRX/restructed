@@ -3,7 +3,7 @@ use crate::logic::{
     *,
 };
 use proc_macro2::{Ident, TokenStream};
-use proc_macro_error::abort;
+use proc_macro_error3::abort;
 use quote::quote;
 use syn::{Attribute, DeriveInput, Type};
 

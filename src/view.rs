@@ -1,6 +1,6 @@
 use crate::logic::{args::AttrArgs, *};
 use proc_macro2::{Ident, TokenStream};
-use proc_macro_error::abort;
+use proc_macro_error3::abort;
 use quote::quote;
 use syn::{self, Attribute, DataEnum, DataStruct, DeriveInput};
 
